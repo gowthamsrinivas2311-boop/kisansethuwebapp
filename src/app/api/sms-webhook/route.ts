@@ -1,17 +1,20 @@
 import twilio from "twilio";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseServerClient } from "@/lib/supabase";
 
 export async function POST(req: Request) {
   const formData = await req.formData();
   const body = (formData.get("Body") as string)?.trim().toUpperCase();
+  const supabase = getSupabaseServerClient();
 
-  const { data } = await supabase
-    .from("prices")
-    .select("*")
-    .ilike("crop", body)
-    .order("date", { ascending: false })
-    .limit(1)
-    .single();
+  const { data } = supabase
+    ? await supabase
+      .from("prices")
+      .select("*")
+      .ilike("crop", body)
+      .order("date", { ascending: false })
+      .limit(1)
+      .single()
+    : { data: null };
 
   const twiml = new twilio.twiml.MessagingResponse();
   twiml.message(
