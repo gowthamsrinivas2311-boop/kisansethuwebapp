@@ -1,166 +1,100 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import {
-  IconArrowLeft, IconBulb, IconBuildingStore, IconCalculator, IconChartBar,
-  IconChevronRight, IconHome, IconMapPin, IconMessage, IconPlant2,
-  IconPlus, IconSend, IconTrendingDown, IconTrendingUp, IconUserCircle,
-} from "@tabler/icons-react";
-import { CROPS, MARKETS } from "@/lib/demo-data";
+import { IconArrowLeft, IconBulb, IconBuildingStore, IconCalculator, IconChartBar, IconChevronRight, IconCircleCheck, IconHome, IconMapPin, IconMessage, IconPlant2, IconPlus, IconSend, IconTrendingDown, IconTrendingUp, IconUserCircle } from "@tabler/icons-react";
+import { CROPS } from "@/lib/demo-data";
 import type { Language, Listing, PriceSnapshot } from "@/lib/types";
 
 type View = "home" | "prices" | "market" | "sms" | "calculator" | "advisor";
+type Chat = { role: "user" | "assistant"; content: string };
+const money = (amount: number) => `Rs ${Math.round(amount || 0).toLocaleString("en-IN")}`;
 
-const copy = {
-  english: { greeting: "Good morning", prices: "Today’s prices", advisor: "AI advisor", calculate: "Calculate net profit", market: "Marketplace", sms: "SMS prices", ask: "Ask AI advisor", list: "List my crop", farmer: "Farmer", buyer: "Buyer", net: "Net profit", source: "Latest APMC price" },
-  hindi: { greeting: "सुप्रभात", prices: "आज के भाव", advisor: "AI सलाहकार", calculate: "शुद्ध लाभ जानें", market: "बाज़ार", sms: "SMS भाव", ask: "AI सलाहकार से पूछें", list: "फसल सूचीबद्ध करें", farmer: "किसान", buyer: "खरीदार", net: "शुद्ध लाभ", source: "नवीनतम APMC भाव" },
-  marathi: { greeting: "शुभ सकाळ", prices: "आजचे भाव", advisor: "AI सल्लागार", calculate: "निव्वळ नफा मोजा", market: "बाजारपेठ", sms: "SMS भाव", ask: "AI सल्लागाराला विचारा", list: "पीक नोंदवा", farmer: "शेतकरी", buyer: "खरेदीदार", net: "निव्वळ नफा", source: "नवीनतम APMC दर" },
-} as const;
+const buyerDemand = [
+  { buyer: "Sahyadri Fresh Foods", crop: "Tomato", quantity: "60 qtl", offer: 3180, location: "Pune collection centre", verified: true },
+  { buyer: "Deccan Agro Traders", crop: "Onion", quantity: "100 qtl", offer: 4050, location: "Nashik APMC", verified: true },
+  { buyer: "Vidarbha Cotton Co-op", crop: "Cotton", quantity: "80 qtl", offer: 7420, location: "Nagpur APMC", verified: true },
+];
 
-type Copy = (typeof copy)[Language];
-
-const money = (value: number) => `Rs ${Math.round(value).toLocaleString("en-IN")}`;
-
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-xl border border-slate-200 bg-white p-4 ${className}`}>{children}</section>;
+function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <section className={`rounded-lg border-[0.5px] border-[#d9e0d7] bg-white p-4 ${className}`}>{children}</section>;
 }
 
-function CropMark({ crop }: { crop: string }) {
-  return <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-green-200 bg-green-50 text-green-700"><IconPlant2 size={21} stroke={1.7} /><span className="sr-only">{crop}</span></span>;
+function CropBadge({ crop, size = "normal" }: { crop: string; size?: "normal" | "small" }) {
+  const dimensions = size === "small" ? "h-8 w-8" : "h-10 w-10";
+  return <span className={`flex ${dimensions} shrink-0 items-center justify-center rounded-lg border-[0.5px] border-[#b9d7ba] bg-[#eff8ed] text-[#26733b]`}><IconPlant2 size={size === "small" ? 16 : 20} stroke={1.7} /><span className="sr-only">{crop}</span></span>;
 }
 
-function PriceRow({ item, compact = false }: { item: PriceSnapshot; compact?: boolean }) {
-  const rising = item.trend >= 0;
-  return <div className={`flex items-center gap-3 ${compact ? "py-2" : "py-3"}`}>
-    <CropMark crop={item.crop} />
-    <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-900">{item.crop}</p><p className="mt-0.5 truncate text-xs text-slate-500">{item.market}</p></div>
-    <div className="text-right"><p className="text-sm font-medium text-slate-900">{money(item.price)}</p><p className="mt-0.5 text-xs text-slate-500">per {item.unit}</p></div>
-    <span className={`flex w-12 items-center justify-end gap-0.5 text-xs font-medium ${rising ? "text-green-700" : "text-red-600"}`}>{rising ? <IconTrendingUp size={15} /> : <IconTrendingDown size={15} />}{Math.abs(item.trend)}%</span>
-  </div>;
+function Trend({ value }: { value: number }) {
+  const up = value >= 0;
+  return <span className={`inline-flex items-center gap-1 text-xs font-medium ${up ? "text-[#19733d]" : "text-[#b42318]"}`}>{up ? <IconTrendingUp size={15} /> : <IconTrendingDown size={15} />}{Math.abs(value).toFixed(1)}%</span>;
+}
+
+function PriceCard({ item }: { item: PriceSnapshot }) {
+  return <Panel><div className="flex items-center gap-3"><CropBadge crop={item.crop} /><div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#18251b]">{item.crop}</p><p className="mt-1 truncate text-xs text-[#6d7b70]">{item.market}</p></div><div className="text-right"><p className="text-base font-medium text-[#18251b]">{money(item.price)}</p><p className="mt-0.5 text-[11px] text-[#6d7b70]">per quintal</p></div></div><div className="mt-3 flex items-center justify-between border-t border-[#edf0ec] pt-3"><span className="text-xs text-[#6d7b70]">vs previous market day</span><Trend value={item.trend} /></div></Panel>;
 }
 
 export function KisanSetuApp() {
   const [view, setView] = useState<View>("home");
   const [language, setLanguage] = useState<Language>("english");
   const [prices, setPrices] = useState<PriceSnapshot[]>([]);
-  const [loadingPrices, setLoadingPrices] = useState(true);
-  const t = copy[language];
-
-  useEffect(() => {
-    fetch("/api/prices").then((response) => response.json()).then((data) => setPrices(toPriceSnapshots(Array.isArray(data) ? data : data.prices ?? []))).catch(() => undefined).finally(() => setLoadingPrices(false));
-  }, []);
-
-  const topCrop = useMemo(() => [...prices].sort((a, b) => b.trend - a.trend)[0] ?? null, [prices]);
-  const goHome = () => setView("home");
-
-  return <main className="mx-auto min-h-screen max-w-xl bg-[#f7f8f7] pb-24 text-slate-900">
-    <header className="border-b border-slate-200 bg-white px-5 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <div><p className="text-sm text-slate-500">{t.greeting},</p><h1 className="mt-0.5 text-lg font-medium">Aarav Patil</h1><p className="mt-1 flex items-center gap-1 text-xs text-slate-500"><IconMapPin size={13} /> Nashik, Maharashtra</p></div>
-        <div className="flex items-center gap-2"><select aria-label="Language" value={language} onChange={(event) => setLanguage(event.target.value as Language)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-600"><option value="english">EN</option><option value="hindi">HI</option><option value="marathi">MR</option></select><IconUserCircle size={35} className="text-slate-500" stroke={1.5} /></div>
-      </div>
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { fetch("/api/prices").then((r) => r.json()).then((rows) => setPrices(toCropPrices(Array.isArray(rows) ? rows : []))).catch(() => undefined).finally(() => setLoading(false)); }, []);
+  const leader = useMemo(() => [...prices].sort((a, b) => b.trend - a.trend)[0], [prices]);
+  return <main className="mx-auto min-h-screen max-w-xl bg-[#f5f7f3] pb-24 text-[#18251b]">
+    <header className="border-b-[0.5px] border-[#cbd8ca] bg-[#1f6b38] text-white">
+      <div className="flex items-center justify-between px-5 py-3"><div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/30 bg-white/10"><IconPlant2 size={18} /></span><div><p className="text-sm font-medium">KisanSetu</p><p className="text-[11px] text-green-100">Maharashtra market service</p></div></div><select aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value as Language)} className="h-8 rounded-md border border-white/30 bg-[#1f6b38] px-2 text-xs text-white"><option value="english">EN</option><option value="hindi">HI</option><option value="marathi">MR</option></select></div>
+      <div className="border-t border-white/15 px-5 py-4"><div className="flex items-start justify-between"><div><p className="text-xs text-green-100">Good morning,</p><h1 className="mt-1 text-xl font-medium">Aarav Patil</h1><p className="mt-2 flex items-center gap-1 text-xs text-green-100"><IconMapPin size={14} />Niphad, Nashik</p></div><IconUserCircle size={38} stroke={1.4} className="text-green-100" /></div></div>
     </header>
-
     <div className="px-4 py-5">
-      {view === "home" && <Dashboard prices={prices} loading={loadingPrices} topCrop={topCrop} t={t} setView={setView} />}
-      {view === "prices" && <PricesView prices={prices} loading={loadingPrices} t={t} />}
-      {view === "calculator" && <Calculator prices={prices} t={t} onBack={goHome} />}
-      {view === "advisor" && <Advisor prices={prices} language={language} t={t} onBack={goHome} />}
+      {view === "home" && <Home prices={prices} loading={loading} leader={leader} go={setView} />}
+      {view === "prices" && <Prices prices={prices} loading={loading} />}
       {view === "market" && <Market />}
-      {view === "sms" && <SmsView prices={prices} />}
+      {view === "sms" && <Sms prices={prices} />}
+      {view === "calculator" && <Calculator prices={prices} onBack={() => setView("home")} />}
+      {view === "advisor" && <Advisor prices={prices} language={language} onBack={() => setView("home")} />}
     </div>
-
-    <nav aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 z-10 border-t border-slate-200 bg-white"><div className="mx-auto grid max-w-xl grid-cols-4">
-      <NavButton label="Home" active={view === "home"} onClick={() => setView("home")} icon={<IconHome size={20} stroke={1.6} />} />
-      <NavButton label="Prices" active={view === "prices"} onClick={() => setView("prices")} icon={<IconChartBar size={20} stroke={1.6} />} />
-      <NavButton label="Market" active={view === "market"} onClick={() => setView("market")} icon={<IconBuildingStore size={20} stroke={1.6} />} />
-      <NavButton label="SMS" active={view === "sms"} onClick={() => setView("sms")} icon={<IconMessage size={20} stroke={1.6} />} />
-    </div></nav>
+    <nav className="fixed bottom-0 left-0 right-0 z-20 border-t-[0.5px] border-[#cbd8ca] bg-white"><div className="mx-auto grid max-w-xl grid-cols-4"><Nav label="Home" active={view === "home"} icon={<IconHome size={20} />} onClick={() => setView("home")} /><Nav label="Prices" active={view === "prices"} icon={<IconChartBar size={20} />} onClick={() => setView("prices")} /><Nav label="Market" active={view === "market"} icon={<IconBuildingStore size={20} />} onClick={() => setView("market")} /><Nav label="SMS" active={view === "sms"} icon={<IconMessage size={20} />} onClick={() => setView("sms")} /></div></nav>
   </main>;
 }
 
-function NavButton({ label, active, onClick, icon }: { label: string; active: boolean; onClick: () => void; icon: React.ReactNode }) {
-  return <button onClick={onClick} className={`flex h-16 flex-col items-center justify-center gap-1 text-xs ${active ? "text-green-700" : "text-slate-500"}`}>{icon}<span>{label}</span></button>;
+function Nav({ label, icon, active, onClick }: { label: string; icon: React.ReactNode; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={`flex h-16 flex-col items-center justify-center gap-1 text-[11px] ${active ? "text-[#1f6b38]" : "text-[#7a857b]"}`}>{icon}<span className={active ? "font-medium" : ""}>{label}</span></button>; }
+function Title({ title, detail, back }: { title: string; detail: string; back?: () => void }) { return <div className="mb-4 flex items-start gap-3">{back && <button aria-label="Back" onClick={back} className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg border-[0.5px] border-[#cbd8ca] bg-white"><IconArrowLeft size={18} /></button>}<div><h2 className="text-lg font-medium">{title}</h2><p className="mt-1 text-xs text-[#6d7b70]">{detail}</p></div></div>; }
+
+function Home({ prices, loading, leader, go }: { prices: PriceSnapshot[]; loading: boolean; leader?: PriceSnapshot; go: (view: View) => void }) {
+  return <div className="space-y-5"><div className="grid grid-cols-3 gap-2"><Status label="Market records" value={loading ? "..." : `${prices.length} crops`} /><Status label="Buyer requests" value="12 open" /><Status label="Verified sellers" value="48 active" /></div><Panel className="border-[#a9cda9] bg-[#eff8ed]"><div className="flex gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-[0.5px] border-[#a9cda9] bg-white text-[#19733d]"><IconBulb size={20} /></span><div className="min-w-0 flex-1"><p className="text-sm font-medium">Market assistant</p><p className="mt-1 text-sm leading-5 text-[#536155]">{leader ? `${leader.crop} has the strongest movement today at ${Math.abs(leader.trend).toFixed(1)}%. Ask about selling, storage, nearby buyers, or net returns.` : "Ask about selling, storage, nearby buyers, or net returns."}</p><button onClick={() => go("advisor")} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#155c2f]">Talk to assistant <IconChevronRight size={16} /></button></div></div></Panel><div className="flex items-center justify-between"><div><h2 className="text-lg font-medium">Today&apos;s crop prices</h2><p className="mt-1 text-xs text-[#6d7b70]">Maharashtra weighted market average</p></div><button onClick={() => go("prices")} className="text-sm font-medium text-[#1f6b38]">All prices</button></div>{loading ? <Panel><p className="text-sm text-[#6d7b70]">Loading verified price records...</p></Panel> : <div className="grid grid-cols-1 gap-3">{prices.slice(0, 4).map((item) => <PriceCard key={item.crop} item={item} />)}</div>}<div className="grid grid-cols-2 gap-3"><button onClick={() => go("market")} className="rounded-lg border-[0.5px] border-[#cbd8ca] bg-white p-4 text-left"><IconBuildingStore size={21} className="text-[#1f6b38]" /><p className="mt-3 text-sm font-medium">Find a buyer</p><p className="mt-1 text-xs leading-4 text-[#6d7b70]">Live demand from local traders</p></button><button onClick={() => go("calculator")} className="rounded-lg border-[0.5px] border-[#cbd8ca] bg-white p-4 text-left"><IconCalculator size={21} className="text-[#1f6b38]" /><p className="mt-3 text-sm font-medium">Net return</p><p className="mt-1 text-xs leading-4 text-[#6d7b70]">Calculate travel and packing costs</p></button></div></div>;
 }
+function Status({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border-[0.5px] border-[#d9e0d7] bg-white p-3"><p className="text-[11px] leading-4 text-[#6d7b70]">{label}</p><p className="mt-1 text-sm font-medium text-[#18251b]">{value}</p></div>; }
+function Prices({ prices, loading }: { prices: PriceSnapshot[]; loading: boolean }) { return <><Title title="Mandi price board" detail="Daily prices averaged across reporting markets" />{loading ? <Panel>Loading market records...</Panel> : <div className="space-y-3">{prices.map((item) => <PriceCard key={item.crop} item={item} />)}</div>}</>; }
 
-function toPriceSnapshots(rows: Array<Record<string, unknown>>): PriceSnapshot[] {
-  const groups = new Map<string, Array<Record<string, unknown>>>();
-  for (const row of rows) {
-    const key = String(row.crop);
-    groups.set(key, [...(groups.get(key) ?? []), row]);
-  }
-  return [...groups.entries()].map(([crop, group]) => {
-    const days = new Map<string, Array<Record<string, unknown>>>();
-    for (const row of group) {
-      const date = String(row.date);
-      days.set(date, [...(days.get(date) ?? []), row]);
-    }
-    const [currentDate, previousDate] = [...days.keys()].sort((a, b) => b.localeCompare(a));
-    const current = days.get(currentDate) ?? [];
-    const previous = previousDate ? days.get(previousDate) ?? [] : [];
-    const average = (items: Array<Record<string, unknown>>) => items.reduce((sum, item) => sum + Number(item.price), 0) / items.length;
-    const price = average(current);
-    const previousPrice = previous.length ? average(previous) : null;
-    return {
-      crop, market: "Maharashtra market average", price,
-      unit: String(current[0]?.unit ?? "quintal"), date: currentDate, source: String(current[0]?.source ?? "data.gov.in"),
-      previousPrice, trend: previousPrice ? Number((((price - previousPrice) / previousPrice) * 100).toFixed(1)) : 0,
-    };
-  });
+function Calculator({ prices, onBack }: { prices: PriceSnapshot[]; onBack: () => void }) {
+  const [crop, setCrop] = useState("Onion"); const [quantity, setQuantity] = useState(10); const [distance, setDistance] = useState(25);
+  const chosen = prices.find((item) => item.crop === crop); const gross = (chosen?.price ?? 0) * quantity; const transport = distance * 8; const packing = gross * 0.05; const net = gross - transport - packing;
+  return <div className="space-y-4"><Title title="Net return calculator" detail="Estimate your sale value before you transport." back={onBack} /><Panel><div className="space-y-4"><Field label="Crop"><select value={crop} onChange={(e) => setCrop(e.target.value)}>{CROPS.map((item) => <option key={item}>{item}</option>)}</select></Field><div className="grid grid-cols-2 gap-3"><Field label="Quantity (qtl)"><input type="number" min="0" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} /></Field><Field label="Distance (km)"><input type="number" min="0" value={distance} onChange={(e) => setDistance(Number(e.target.value))} /></Field></div></div></Panel><Panel className="border-[#a9cda9]"><p className="text-xs text-[#6d7b70]">Estimated return using {chosen ? money(chosen.price) : "current price"}/qtl</p><div className="mt-4 space-y-3 text-sm"><Row label="Gross sale value" value={money(gross)} /><Row label="Transport (Rs 8/km)" value={`-${money(transport)}`} /><Row label="Packing (5%)" value={`-${money(packing)}`} /><div className="flex justify-between border-t border-[#dce7db] pt-3 text-base font-medium"><span>Expected net return</span><span className="text-[#19733d]">{money(net)}</span></div></div></Panel></div>;
 }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-sm text-[#304133]"><span className="mb-1.5 block">{label}</span><span className="block [&_input]:h-11 [&_input]:w-full [&_input]:rounded-md [&_input]:border-[0.5px] [&_input]:border-[#cbd8ca] [&_input]:bg-white [&_input]:px-3 [&_select]:h-11 [&_select]:w-full [&_select]:rounded-md [&_select]:border-[0.5px] [&_select]:border-[#cbd8ca] [&_select]:bg-white [&_select]:px-3">{children}</span></label>; }
+function Row({ label, value }: { label: string; value: string }) { return <div className="flex justify-between text-[#566457]"><span>{label}</span><span>{value}</span></div>; }
 
-function Dashboard({ prices, loading, topCrop, t, setView }: { prices: PriceSnapshot[]; loading: boolean; topCrop: PriceSnapshot | null; t: Copy; setView: (view: View) => void }) {
-  return <div className="space-y-4">
-    <div className="flex items-center justify-between"><div><h2 className="text-base font-medium">{t.prices}</h2><p className="mt-1 text-xs text-slate-500">{t.source}</p></div><button onClick={() => setView("prices")} className="flex items-center gap-1 text-sm text-blue-700">View all <IconChevronRight size={16} /></button></div>
-    {loading ? <Card><p className="py-4 text-sm text-slate-500">Loading market prices...</p></Card> : <div className="grid gap-3">{prices.map((item) => <Card key={item.crop}><PriceRow item={item} compact /></Card>)}</div>}
-    <Card className="border-blue-200"><div className="flex gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700"><IconBulb size={21} stroke={1.7} /></span><div className="min-w-0 flex-1"><div className="flex items-center justify-between"><h2 className="text-sm font-medium text-slate-900">{t.advisor}</h2><span className="text-xs text-blue-700">{topCrop ? topCrop.crop : ""}</span></div><p className="mt-1 text-sm leading-5 text-slate-600">{topCrop ? `${topCrop.crop} is up ${topCrop.trend}%. Compare nearby market offers before deciding your selling quantity.` : "Get a practical crop-selling recommendation in your language."}</p><button onClick={() => setView("advisor")} className="mt-3 text-sm font-medium text-blue-700">{t.ask}</button></div></div></Card>
-    <button onClick={() => setView("calculator")} className="flex w-full items-center justify-center gap-2 rounded-xl border border-green-700 bg-green-700 px-4 py-3.5 text-sm font-medium text-white"><IconCalculator size={20} stroke={1.7} />{t.calculate}</button>
-  </div>;
-}
-
-function PricesView({ prices, loading, t }: { prices: PriceSnapshot[]; loading: boolean; t: Copy }) {
-  return <div className="space-y-4"><div><h2 className="text-base font-medium">{t.prices}</h2><p className="mt-1 text-xs text-slate-500">Updated 10 Sep 2026 from APMC reports</p></div><Card>{loading ? <p className="py-4 text-sm text-slate-500">Loading market prices...</p> : <div className="divide-y divide-slate-100">{prices.map((item) => <PriceRow item={item} key={`${item.crop}-${item.market}`} />)}</div>}</Card></div>;
-}
-
-function BackTitle({ title, onBack }: { title: string; onBack: () => void }) { return <div className="flex items-center gap-3"><button aria-label="Back" onClick={onBack} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700"><IconArrowLeft size={19} /></button><h2 className="text-base font-medium">{title}</h2></div>; }
-
-function Calculator({ prices, t, onBack }: { prices: PriceSnapshot[]; t: Copy; onBack: () => void }) {
-  const [crop, setCrop] = useState("Onion"); const [quantity, setQuantity] = useState(10); const [market, setMarket] = useState("Nashik APMC"); const [distance, setDistance] = useState(25);
-  const chosen = prices.find((item) => item.crop === crop && item.market === market) ?? prices.find((item) => item.crop === crop) ?? { price: 0 } as PriceSnapshot;
-  const gross = chosen.price * quantity; const transport = distance * 8; const packaging = gross * 0.05; const net = gross - transport - packaging;
-  return <div className="space-y-4"><BackTitle title={t.calculate} onBack={onBack} /><Card><div className="space-y-4"><Field label="Crop"><select value={crop} onChange={(e) => setCrop(e.target.value)}>{CROPS.map((item) => <option key={item}>{item}</option>)}</select></Field><Field label="Quantity (qtl)"><input type="number" min="0" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} /></Field><Field label="Market"><select value={market} onChange={(e) => setMarket(e.target.value)}>{MARKETS.map((item) => <option key={item}>{item}</option>)}</select></Field><Field label="Distance (km)"><input type="number" min="0" value={distance} onChange={(e) => setDistance(Number(e.target.value))} /></Field></div></Card><Card><p className="text-xs text-slate-500">Market price used</p><p className="mt-1 text-lg font-medium">{money(chosen.price)} <span className="text-sm font-normal text-slate-500">per quintal</span></p><div className="mt-4 space-y-3 border-t border-slate-100 pt-4 text-sm"><Line label="Gross value" value={money(gross)} /><Line label="Transport (Rs 8/km)" value={`-${money(transport)}`} /><Line label="Packaging (5% gross)" value={`-${money(packaging)}`} /><div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base font-medium"><span>{t.net}</span><span className="text-green-700">{money(net)}</span></div></div></Card></div>;
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-sm text-slate-700"><span className="mb-1.5 block">{label}</span>{children && <span className="block [&_input]:h-11 [&_input]:w-full [&_input]:rounded-lg [&_input]:border [&_input]:border-slate-200 [&_input]:bg-white [&_input]:px-3 [&_select]:h-11 [&_select]:w-full [&_select]:rounded-lg [&_select]:border [&_select]:border-slate-200 [&_select]:bg-white [&_select]:px-3">{children}</span>}</label>; }
-function Line({ label, value }: { label: string; value: string }) { return <div className="flex justify-between text-slate-600"><span>{label}</span><span>{value}</span></div>; }
-
-function Advisor({ prices, language, t, onBack }: { prices: PriceSnapshot[]; language: Language; t: Copy; onBack: () => void }) {
-  const [crop, setCrop] = useState("Onion"); const [advice, setAdvice] = useState(""); const [pending, setPending] = useState(false);
+function Advisor({ prices, language, onBack }: { prices: PriceSnapshot[]; language: Language; onBack: () => void }) {
+  const [crop, setCrop] = useState("Onion"); const [question, setQuestion] = useState(""); const [waiting, setWaiting] = useState(false);
+  const [messages, setMessages] = useState<Chat[]>([{ role: "assistant", content: "Namaskar. I can help you compare prices, decide whether to sell or wait, calculate a likely net return, or find the right market question to ask a buyer." }]);
   const selected = prices.find((item) => item.crop === crop) ?? prices[0];
-  async function ask() {
-    if (!selected) return;
-    setPending(true);
-    try { const response = await fetch("/api/advise", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ crop, price: selected.price, trend: selected.trend, language }) }); const data = await response.json(); setAdvice(data.advice ?? "Unable to get advice right now."); } finally { setPending(false); }
+  async function send(text = question) {
+    const clean = text.trim(); if (!clean || !selected || waiting) return;
+    const next = [...messages, { role: "user" as const, content: clean }]; setMessages(next); setQuestion(""); setWaiting(true);
+    try { const response = await fetch("/api/advise", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ crop, price: selected.price, trend: selected.trend, language, question: clean, history: messages }) }); const data = await response.json(); setMessages((current) => [...current, { role: "assistant", content: data.advice ?? "I could not answer that just now. Please try again." }]); } finally { setWaiting(false); }
   }
-  return <div className="space-y-4"><BackTitle title={t.advisor} onBack={onBack} /><Card><p className="text-xs text-slate-500">Choose a crop for a practical selling recommendation.</p><div className="mt-3 flex gap-2"><select value={crop} onChange={(e) => setCrop(e.target.value)} className="h-11 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm">{CROPS.map((item) => <option key={item}>{item}</option>)}</select><button onClick={ask} disabled={pending || !selected} className="rounded-lg border border-blue-700 bg-blue-700 px-3 text-sm font-medium text-white disabled:opacity-60">{pending ? "Thinking..." : t.ask}</button></div></Card><div className="space-y-3"><div className="flex justify-end"><div className="max-w-[84%] rounded-xl rounded-br-sm border border-green-200 bg-green-50 px-3 py-2.5 text-sm leading-5 text-slate-700">What should I do with {crop} today?</div></div>{advice ? <div className="flex gap-2"><span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700"><IconBulb size={15} /></span><div className="max-w-[84%] rounded-xl rounded-tl-sm border border-blue-200 bg-white px-3 py-2.5 text-sm leading-5 text-slate-700">{advice}</div></div> : <div className="flex gap-2"><span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700"><IconBulb size={15} /></span><div className="max-w-[84%] rounded-xl rounded-tl-sm border border-slate-200 bg-white px-3 py-2.5 text-sm leading-5 text-slate-500">Select a crop, then ask for advice in {language}.</div></div>}</div></div>;
+  const quick = ["Should I sell today?", "What price should I ask buyers?", "Is storage worth the cost?"];
+  return <div className="space-y-4"><Title title="Market assistant" detail="Ask about prices, buyers, selling time, storage, or transport." back={onBack} /><Panel className="p-3"><div className="flex items-center gap-3"><CropBadge crop={crop} size="small" /><select value={crop} onChange={(e) => setCrop(e.target.value)} className="h-10 min-w-0 flex-1 rounded-md border-[0.5px] border-[#cbd8ca] bg-white px-3 text-sm">{CROPS.map((item) => <option key={item}>{item}</option>)}</select>{selected && <span className="text-right text-xs font-medium text-[#19733d]">{money(selected.price)}<br />/qtl</span>}</div></Panel><div className="space-y-3">{messages.map((message, index) => <div key={`${message.role}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-lg border-[0.5px] px-3 py-2.5 text-sm leading-5 ${message.role === "user" ? "border-[#b9d7ba] bg-[#eff8ed] text-[#203b26]" : "border-[#d9e0d7] bg-white text-[#354239]"}`}>{message.content}</div></div>)}{waiting && <div className="flex"><div className="rounded-lg border-[0.5px] border-[#d9e0d7] bg-white px-3 py-2.5 text-sm text-[#6d7b70]">Checking your market context...</div></div>}</div><div className="flex flex-wrap gap-2">{quick.map((item) => <button key={item} onClick={() => send(item)} className="rounded-md border-[0.5px] border-[#cbd8ca] bg-white px-2.5 py-2 text-xs text-[#356642]">{item}</button>)}</div><div className="flex gap-2 border-t border-[#dfe6dd] pt-4"><input value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="Ask a market question" className="h-11 min-w-0 flex-1 rounded-md border-[0.5px] border-[#cbd8ca] bg-white px-3 text-sm" /><button onClick={() => send()} aria-label="Send question" className="flex h-11 w-11 items-center justify-center rounded-md border border-[#1f6b38] bg-[#1f6b38] text-white"><IconSend size={18} /></button></div><p className="text-[11px] leading-4 text-[#748176]">Advice is informational. Verify live offers and weigh quality, transport, and storage before you sell.</p></div>;
 }
 
 function Market() {
-  const [mode, setMode] = useState<"buyer" | "farmer">("buyer"); const [listings, setListings] = useState<Listing[]>([]); const [status, setStatus] = useState("");
+  const [mode, setMode] = useState<"buyers" | "sellers" | "list">("buyers"); const [listings, setListings] = useState<Listing[]>([]); const [notice, setNotice] = useState("");
   const [form, setForm] = useState({ farmer_name: "", crop: "Onion", quantity: "", price: "", location: "", phone: "" });
-  useEffect(() => { fetch("/api/listings").then((r) => r.json()).then((data) => setListings(data.listings ?? [])).catch(() => setStatus("Listings are unavailable right now.")); }, []);
-  async function submit(event: FormEvent) {
-    event.preventDefault(); setStatus("");
-    const response = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const data = await response.json();
-    if (!response.ok) { setStatus(data.error ?? "Could not add your listing."); return; }
-    setListings((current) => [data.listing, ...current]); setForm({ farmer_name: "", crop: "Onion", quantity: "", price: "", location: "", phone: "" }); setStatus("Your crop is listed in the marketplace."); setMode("buyer");
-  }
-  return <div className="space-y-4"><div><h2 className="text-base font-medium">Marketplace</h2><p className="mt-1 text-xs text-slate-500">Connect directly with farmers and buyers.</p></div><div className="grid grid-cols-2 rounded-lg border border-slate-200 bg-white p-1"><button onClick={() => setMode("buyer")} className={`h-9 rounded-md text-sm ${mode === "buyer" ? "bg-slate-900 text-white" : "text-slate-600"}`}>Buyer</button><button onClick={() => setMode("farmer")} className={`h-9 rounded-md text-sm ${mode === "farmer" ? "bg-slate-900 text-white" : "text-slate-600"}`}>Farmer</button></div>{status && <p className={`text-sm ${status.startsWith("Your") ? "text-green-700" : "text-red-600"}`}>{status}</p>}{mode === "buyer" ? <div className="space-y-3">{listings.map((listing) => <Card key={listing.id}><div className="flex gap-3"><CropMark crop={listing.crop} /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><p className="font-medium">{listing.crop}</p><p className="mt-1 text-xs text-slate-500">{listing.quantity} qtl · {listing.location}</p></div><p className="text-sm font-medium">{money(listing.price)}<span className="block text-right text-xs font-normal text-slate-500">/ qtl</span></p></div><a href={`https://wa.me/${listing.phone}`} target="_blank" rel="noreferrer" className="mt-3 flex h-10 items-center justify-center gap-2 rounded-lg border border-green-700 text-sm font-medium text-green-700"><IconMessage size={17} />Contact via WhatsApp</a></div></div></Card>)}</div> : <Card><form className="space-y-4" onSubmit={submit}><p className="text-sm text-slate-600">Make your crop available to verified local buyers.</p><Field label="Your name"><input value={form.farmer_name} onChange={(e) => setForm({ ...form, farmer_name: e.target.value })} placeholder="Farmer name" /></Field><Field label="Crop"><select value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })}>{CROPS.map((item) => <option key={item}>{item}</option>)}</select></Field><div className="grid grid-cols-2 gap-3"><Field label="Quantity (qtl)"><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field><Field label="Expected price / qtl"><input type="number" min="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field></div><Field label="Location"><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Village, district" /></Field><Field label="WhatsApp number"><input inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="91XXXXXXXXXX" /></Field><button className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-green-700 bg-green-700 text-sm font-medium text-white"><IconPlus size={18} />List my crop</button></form></Card>}</div>;
+  useEffect(() => { fetch("/api/listings").then((r) => r.json()).then((data) => setListings(data.listings ?? [])).catch(() => setNotice("Marketplace data is temporarily unavailable.")); }, []);
+  async function submit(event: FormEvent) { event.preventDefault(); const response = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const data = await response.json(); if (!response.ok) { setNotice(data.error ?? "Could not publish the listing."); return; } setListings((current) => [data.listing, ...current]); setForm({ farmer_name: "", crop: "Onion", quantity: "", price: "", location: "", phone: "" }); setNotice("Listing published for buyers in your region."); setMode("sellers"); }
+  return <div className="space-y-4"><Title title="Market linkage" detail="Verified buyer demand and farmer supply in one place." /><div className="grid grid-cols-3 rounded-lg border-[0.5px] border-[#cbd8ca] bg-white p-1"><Tab active={mode === "buyers"} onClick={() => setMode("buyers")}>Buyer demand</Tab><Tab active={mode === "sellers"} onClick={() => setMode("sellers")}>Farmer supply</Tab><Tab active={mode === "list"} onClick={() => setMode("list")}>List crop</Tab></div>{notice && <p className="text-sm text-[#19733d]">{notice}</p>}{mode === "buyers" && <div className="space-y-3">{buyerDemand.map((demand) => <Panel key={demand.buyer}><div className="flex items-start gap-3"><CropBadge crop={demand.crop} /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-medium">{demand.buyer}</p><p className="mt-1 flex items-center gap-1 text-xs text-[#19733d]"><IconCircleCheck size={13} />Verified buyer</p></div><p className="text-right text-sm font-medium">{money(demand.offer)}<span className="block text-[11px] font-normal text-[#6d7b70]">offer / qtl</span></p></div><div className="mt-3 grid grid-cols-2 gap-2 border-t border-[#edf0ec] pt-3 text-xs text-[#657366]"><span>{demand.crop} · {demand.quantity}</span><span className="text-right">{demand.location}</span></div><button className="mt-3 h-9 w-full rounded-md border-[0.5px] border-[#1f6b38] text-sm font-medium text-[#1f6b38]">Request buyer contact</button></div></div></Panel>)}</div>}{mode === "sellers" && <div className="space-y-3">{listings.map((listing) => <Panel key={listing.id}><div className="flex gap-3"><CropBadge crop={listing.crop} /><div className="min-w-0 flex-1"><div className="flex justify-between gap-2"><div><p className="text-sm font-medium">{listing.crop} from {listing.farmer_name}</p><p className="mt-1 text-xs text-[#6d7b70]">{listing.quantity} qtl · {listing.location}</p></div><p className="text-right text-sm font-medium">{money(listing.price)}<span className="block text-[11px] font-normal text-[#6d7b70]">/ qtl</span></p></div><a href={`https://wa.me/${listing.phone}`} target="_blank" rel="noreferrer" className="mt-3 flex h-9 items-center justify-center gap-2 rounded-md border-[0.5px] border-[#1f6b38] text-sm font-medium text-[#1f6b38]"><IconMessage size={16} />Contact farmer</a></div></div></Panel>)}</div>}{mode === "list" && <Panel><form className="space-y-4" onSubmit={submit}><p className="text-sm leading-5 text-[#59665b]">Publish your available crop for nearby verified buyers.</p><Field label="Farmer name"><input value={form.farmer_name} onChange={(e) => setForm({ ...form, farmer_name: e.target.value })} /></Field><Field label="Crop"><select value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })}>{CROPS.map((item) => <option key={item}>{item}</option>)}</select></Field><div className="grid grid-cols-2 gap-3"><Field label="Quantity (qtl)"><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field><Field label="Expected Rs / qtl"><input type="number" min="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field></div><Field label="Village / district"><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field><Field label="WhatsApp number"><input inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field><button className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-[#1f6b38] bg-[#1f6b38] text-sm font-medium text-white"><IconPlus size={17} />Publish crop listing</button></form></Panel>}</div>;
 }
+function Tab({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={`min-w-0 rounded-md px-1 py-2 text-[11px] ${active ? "bg-[#1f6b38] font-medium text-white" : "text-[#59665b]"}`}>{children}</button>; }
+function Sms({ prices }: { prices: PriceSnapshot[] }) { const [query, setQuery] = useState("ONION"); const [sent, setSent] = useState(false); const found = prices.find((item) => item.crop.toUpperCase() === query.trim().toUpperCase()); return <div className="space-y-4"><Title title="SMS market service" detail="Farmers can text a crop name to receive one latest price." /><Panel><div className="space-y-3"><div className="ml-auto max-w-[75%] rounded-lg border-[0.5px] border-[#b9d7ba] bg-[#eff8ed] px-3 py-2 text-sm">ONION</div><div className="max-w-[88%] rounded-lg border-[0.5px] border-[#d9e0d7] bg-white px-3 py-2 text-sm leading-5">ONION: {prices[0] ? `${money(prices.find((item) => item.crop === "Onion")?.price ?? 0)}/quintal. Reply with another crop name.` : "Loading latest record..."}</div>{sent && <><div className="ml-auto max-w-[75%] rounded-lg border-[0.5px] border-[#b9d7ba] bg-[#eff8ed] px-3 py-2 text-sm">{query}</div><div className="max-w-[88%] rounded-lg border-[0.5px] border-[#d9e0d7] bg-white px-3 py-2 text-sm leading-5">{found ? `${found.crop}: ${money(found.price)}/quintal, ${found.trend >= 0 ? "up" : "down"} ${Math.abs(found.trend).toFixed(1)}%.` : "No record found. Try ONION, TOMATO, WHEAT, COTTON, SOYBEAN or POTATO."}</div></>}<div className="flex gap-2 border-t border-[#edf0ec] pt-4"><input value={query} onChange={(e) => setQuery(e.target.value.toUpperCase())} className="h-11 min-w-0 flex-1 rounded-md border-[0.5px] border-[#cbd8ca] px-3 text-sm" /><button onClick={() => setSent(true)} className="flex h-11 w-11 items-center justify-center rounded-md border border-[#1f6b38] bg-[#1f6b38] text-white"><IconSend size={18} /></button></div></div></Panel><Panel><p className="text-sm font-medium">SMS integration is active</p><p className="mt-1 text-sm leading-5 text-[#59665b]">Your Twilio webhook returns a current Supabase price for crop keywords sent to the service number.</p></Panel></div>; }
 
-function SmsView({ prices }: { prices: PriceSnapshot[] }) {
-  const [message, setMessage] = useState("ONION"); const [reply, setReply] = useState("");
-  const onion = prices.find((item) => item.crop === "Onion");
-  function send() { const crop = CROPS.find((item) => message.toLowerCase().includes(item.toLowerCase())); const price = prices.find((item) => item.crop === crop) ?? onion; setReply(price ? `${price.crop}: ${money(price.price)}/${price.unit} at ${price.market}. Trend ${price.trend >= 0 ? "+" : ""}${price.trend}%.` : "Send ONION, TOMATO, WHEAT, COTTON, SOYBEAN, or POTATO."); }
-  return <div className="space-y-4"><div><h2 className="text-base font-medium">SMS price service</h2><p className="mt-1 text-xs text-slate-500">Text a crop name for the latest available market price.</p></div><Card className="space-y-4"><div className="flex justify-end"><p className="rounded-xl rounded-br-sm border border-green-200 bg-green-50 px-3 py-2 text-sm">ONION</p></div><div className="flex"><p className="max-w-[88%] rounded-xl rounded-tl-sm border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5">{onion ? `ONION: ${money(onion.price)}/quintal at ${onion.market}. Trend +${onion.trend}%.` : "Loading latest Onion price..."}</p></div>{reply && <><div className="flex justify-end"><p className="rounded-xl rounded-br-sm border border-green-200 bg-green-50 px-3 py-2 text-sm">{message}</p></div><div className="flex"><p className="max-w-[88%] rounded-xl rounded-tl-sm border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5">{reply}</p></div></>}<div className="flex gap-2 border-t border-slate-100 pt-4"><input value={message} onChange={(e) => setMessage(e.target.value.toUpperCase())} className="h-11 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm" placeholder="Type crop name" /><button onClick={send} aria-label="Send SMS request" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-blue-700 bg-blue-700 text-white"><IconSend size={18} /></button></div></Card><Card><p className="text-sm font-medium">Twilio webhook ready</p><p className="mt-1 text-sm leading-5 text-slate-600">Point your Twilio number’s incoming-message URL to <span className="font-medium text-slate-800">/api/sms-webhook</span>. It accepts crop keywords and returns TwiML.</p></Card></div>;
-}
+function toCropPrices(rows: Array<Record<string, unknown>>): PriceSnapshot[] { const groups = new Map<string, Array<Record<string, unknown>>>(); for (const row of rows) { const crop = String(row.crop); groups.set(crop, [...(groups.get(crop) ?? []), row]); } return [...groups.entries()].map(([crop, records]) => { const dayMap = new Map<string, Array<Record<string, unknown>>>(); for (const row of records) { const date = String(row.date); dayMap.set(date, [...(dayMap.get(date) ?? []), row]); } const [latest, previous] = [...dayMap.keys()].sort((a, b) => b.localeCompare(a)); const mean = (items: Array<Record<string, unknown>>) => items.reduce((total, item) => total + Number(item.price), 0) / items.length; const currentRows = dayMap.get(latest) ?? []; const priorRows = previous ? dayMap.get(previous) ?? [] : []; const price = mean(currentRows); const previousPrice = priorRows.length ? mean(priorRows) : null; return { crop, market: "Maharashtra market average", price, unit: String(currentRows[0]?.unit ?? "quintal"), date: latest, source: String(currentRows[0]?.source ?? "data.gov.in"), previousPrice, trend: previousPrice ? Number((((price - previousPrice) / previousPrice) * 100).toFixed(1)) : 0 }; }); }
