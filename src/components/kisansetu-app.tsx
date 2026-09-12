@@ -130,9 +130,36 @@ function Advisor({ prices, language, onBack }: { prices: PriceSnapshot[]; langua
   const [crop, setCrop] = useState("Onion"); const [question, setQuestion] = useState(""); const [waiting, setWaiting] = useState(false);
   const [messages, setMessages] = useState<Chat[]>([{ role: "assistant", content: "Namaskar. I can help you compare prices, decide whether to sell or wait, calculate a likely net return, or find the right market question to ask a buyer." }]);
   const selected = prices.find((item) => item.crop === crop) ?? prices[0];
-  async function send(text = question) { const clean = text.trim(); if (!clean || !selected || waiting) return; const next = [...messages, { role: "user" as const, content: clean }]; setMessages(next); setQuestion(""); setWaiting(true); try { const response = await fetch("/api/advise", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ crop, price: selected.price, trend: selected.trend, language, question: clean, history: messages }) }); const data = await response.json(); setMessages((current) => [...current, { role: "assistant", content: data.advice ?? "I could not answer that just now. Please try again." }]); } finally { setWaiting(false); } }
+  async function send(text = question) {
+    const clean = text.trim();
+    if (!clean || !selected || waiting) return;
+    const next = [...messages, { role: "user" as const, content: clean }];
+    setMessages(next);
+    setQuestion("");
+    setWaiting(true);
+    try {
+      const response = await fetch("/api/advise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: getAdvisorSessionId(), crop, price: selected.price, trend: selected.trend, language, question: clean }),
+      });
+      const data = await response.json();
+      setMessages((current) => [...current, { role: "assistant", content: data.advice ?? "I could not answer that just now. Please try again." }]);
+    } finally {
+      setWaiting(false);
+    }
+  }
   const quick = ["Should I sell today?", "What price should I ask buyers?", "Is storage worth the cost?"];
   return <div className="max-w-3xl space-y-4"><Title title="Market assistant" detail="Ask about prices, buyers, selling time, storage, or transport." back={onBack} /><Panel className="p-3"><div className="flex items-center gap-3"><CropBadge crop={crop} size="small" /><select value={crop} onChange={(e) => setCrop(e.target.value)} className="h-10 min-w-0 flex-1 rounded-md border border-[#cbd8ca] bg-white px-3 text-sm">{CROPS.map((item) => <option key={item}>{item}</option>)}</select>{selected && <span className="text-right text-xs font-semibold text-[#19733d]">{money(selected.price)}<br />/qtl</span>}</div></Panel><ChatMessages messages={messages} waiting={waiting} /><div className="flex flex-wrap gap-2">{quick.map((item) => <button key={item} onClick={() => send(item)} className="rounded-md border border-[#cbd8ca] bg-white px-2.5 py-2 text-xs text-[#356642] transition hover:border-[#d49b16]">{item}</button>)}</div><div className="flex gap-2 border-t border-[#dfe6dd] pt-4"><input value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="Ask a market question" className="h-11 min-w-0 flex-1 rounded-md border border-[#cbd8ca] bg-white px-3 text-sm" /><button onClick={() => send()} aria-label="Send question" className="flex h-11 w-11 items-center justify-center rounded-md border border-[#1f6b38] bg-[#1f6b38] text-white"><IconSend size={18} /></button></div><p className="text-[11px] leading-4 text-[#748176]">Advice is informational. Verify live offers and weigh quality, transport, and storage before you sell.</p></div>;
+}
+
+function getAdvisorSessionId() {
+  const key = "kisansetu-advisor-session";
+  const existing = window.localStorage.getItem(key);
+  if (existing) return existing;
+  const created = crypto.randomUUID();
+  window.localStorage.setItem(key, created);
+  return created;
 }
 function ChatMessages({ messages, waiting }: { messages: Chat[]; waiting?: boolean }) { return <div className="rounded-lg border border-[#dbe3d5] bg-[#fbfaf6] p-3"><div className="space-y-3">{messages.map((message, index) => <div key={`${message.role}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-2xl border px-3 py-2.5 text-sm leading-5 shadow-sm ${message.role === "user" ? "rounded-br-sm border-[#b9d7ba] bg-[#e8f4e7] text-[#203b26]" : "rounded-bl-sm border-[#d9e0d7] bg-white text-[#354239]"}`}>{message.content}</div></div>)}{waiting && <div className="flex"><div className="rounded-2xl rounded-bl-sm border border-[#d9e0d7] bg-white px-3 py-2.5 text-sm text-[#6d7b70]">Checking your market context...</div></div>}</div></div>; }
 
