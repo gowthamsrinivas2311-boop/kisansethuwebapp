@@ -8,5 +8,5 @@ body { margin: 0; min-width: 320px; background: #f7f8f7; font-family: Arial, Hel
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 input, select { outline: none; }
-input:focus, select:focus { border-color: #2563eb !important; }
-::selection { background: #dbeafe; }
+input:focus, select:focus { border-color: #d49b16 !important; box-shadow: 0 0 0 3px rgba(212, 155, 22, 0.15); }
+::selection { background: #fff2cc; }
