@@ -1,15 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { User } from "@supabase/supabase-js";
 import { IconArrowLeft, IconBuildingStore, IconCalculator, IconChartBar, IconChevronRight, IconCircleCheck, IconHome, IconLogout, IconMapPin, IconMessage, IconMinus, IconPlant2, IconPlus, IconSend, IconSparkles, IconTrendingDown, IconTrendingUp, IconUserCircle } from "@tabler/icons-react";
 import { CROPS } from "@/lib/demo-data";
-import { supabase } from "@/lib/supabase";
 import type { Language, Listing, PriceSnapshot } from "@/lib/types";
 
 type View = "home" | "prices" | "market" | "sms" | "calculator" | "advisor" | "profile";
 type Chat = { role: "user" | "assistant"; content: string };
-type Profile = { id: string; name: string; village: string; taluka: string; district: string; preferred_language: Language; avatar_url: string | null; email: string | null };
+type Profile = { name: string; village: string; taluka: string; district: string; preferred_language: Language };
 
 const money = (amount: number) => `Rs ${Math.round(amount || 0).toLocaleString("en-IN")}`;
 const cropLooks: Record<string, { mark: string; bg: string; fg: string; line: string }> = {
@@ -60,46 +58,24 @@ function PriceCard({ item }: { item: PriceSnapshot }) {
 
 export function KisanSetuApp() {
   const [view, setView] = useState<View>("home");
-  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
   const [prices, setPrices] = useState<PriceSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase?.auth.getUser().then(({ data }) => setUser(data.user ?? null)).finally(() => setAuthLoading(false));
-    const { data: sub } = supabase?.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null)) ?? { data: { subscription: null } };
-    return () => sub.subscription?.unsubscribe();
+    const saved = window.localStorage.getItem("kisansetu-profile");
+    if (saved) setProfile(JSON.parse(saved) as Profile);
+    setProfileReady(true);
   }, []);
 
   useEffect(() => { fetch("/api/prices").then((r) => r.json()).then((rows) => setPrices(toCropPrices(Array.isArray(rows) ? rows : []))).catch(() => undefined).finally(() => setLoading(false)); }, []);
 
-  useEffect(() => {
-    if (!user || !supabase) { setProfile(null); setProfileLoading(false); return; }
-    let active = true;
-    const userId = user.id;
-    setProfileLoading(true);
-    async function loadProfile() {
-      try {
-        const { data } = await supabase!.from("profiles").select("*").eq("id", userId).maybeSingle();
-        if (active) setProfile(data as Profile | null);
-      } finally {
-        if (active) setProfileLoading(false);
-      }
-    }
-    loadProfile();
-    return () => { active = false; };
-  }, [user]);
-
   const leader = useMemo(() => [...prices].sort((a, b) => b.trend - a.trend)[0], [prices]);
   const language = profile?.preferred_language ?? "english";
 
-  if (!supabase) return <Landing disabled />;
-  if (authLoading) return <main className="flex min-h-screen items-center justify-center bg-[#f5f2ea] text-sm text-[#536155]">Opening KisanSetu...</main>;
-  if (!user) return <Landing />;
-  if (profileLoading) return <main className="flex min-h-screen items-center justify-center bg-[#f5f2ea] text-sm text-[#536155]">Loading your farm profile...</main>;
-  if (!profile) return <Onboarding user={user} onDone={setProfile} />;
+  if (!profileReady) return <main className="flex min-h-screen items-center justify-center bg-[#f5f2ea] text-sm text-[#536155]">Opening KisanSetu...</main>;
+  if (!profile) return <Landing onLogin={setProfile} />;
 
   return <main className="min-h-screen bg-[#f5f2ea] text-[#18251b]">
     <div className="h-1.5 bg-[#16351f]" aria-hidden="true" />
@@ -117,7 +93,7 @@ export function KisanSetuApp() {
           {view === "sms" && <Sms prices={prices} />}
           {view === "calculator" && <Calculator prices={prices} onBack={() => setView("home")} />}
           {view === "advisor" && <Advisor prices={prices} language={language} onBack={() => setView("home")} />}
-          {view === "profile" && <ProfileScreen user={user} profile={profile} onSave={setProfile} />}
+          {view === "profile" && <ProfileScreen profile={profile} onSave={setProfile} onLogout={() => { window.localStorage.removeItem("kisansetu-profile"); setProfile(null); setView("home"); }} />}
         </div>
       </div>
     </div>
@@ -126,16 +102,14 @@ export function KisanSetuApp() {
 }
 
 function Brand() { return <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1f6b38] text-white"><IconPlant2 size={19} /></span><div><p className="text-sm font-bold">KisanSetu</p><p className="text-[11px] text-[#72806f]">Maharashtra market service</p></div></div>; }
-function Header({ profile, setView }: { profile: Profile; setView: (view: View) => void }) { const location = [profile.village, profile.taluka, profile.district].filter(Boolean).join(", "); return <header className="border-b border-[#d7decf] bg-[#fcfbf7]"><div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8"><div className="lg:hidden"><Brand /></div><div className="hidden lg:block"><p className="text-xs text-[#72806f]">Good morning,</p><h1 className="text-2xl font-semibold">{profile.name}</h1><p className="mt-1 flex items-center gap-1 text-sm text-[#61705f]"><IconMapPin size={15} />{location}</p></div><button onClick={() => setView("profile")} className="flex items-center gap-2 rounded-full border border-[#d7decf] bg-white p-1 pr-3 text-sm transition hover:border-[#d49b16] hover:shadow-sm">{profile.avatar_url ? <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full" /> : <IconUserCircle size={32} />}<span className="hidden sm:inline">Account</span></button></div><div className="px-4 pb-4 sm:px-6 lg:hidden"><p className="text-xs text-[#72806f]">Good morning,</p><h1 className="text-xl font-semibold">{profile.name}</h1><p className="mt-1 flex items-center gap-1 text-xs text-[#61705f]"><IconMapPin size={14} />{location}</p></div></header>; }
+function Header({ profile, setView }: { profile: Profile; setView: (view: View) => void }) { const location = [profile.village, profile.taluka, profile.district].filter(Boolean).join(", ") || "Set your farm location"; return <header className="border-b border-[#d7decf] bg-[#fcfbf7]"><div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8"><div className="lg:hidden"><Brand /></div><div className="hidden lg:block"><p className="text-xs text-[#72806f]">Good morning,</p><h1 className="text-2xl font-semibold">{profile.name}</h1><p className="mt-1 flex items-center gap-1 text-sm text-[#61705f]"><IconMapPin size={15} />{location}</p></div><button onClick={() => setView("profile")} className="flex items-center gap-2 rounded-full border border-[#d7decf] bg-white p-1 pr-3 text-sm transition hover:border-[#d49b16] hover:shadow-sm"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e8f4e7] text-[#1f6b38]"><IconUserCircle size={24} /></span><span className="hidden sm:inline">Account</span></button></div><div className="px-4 pb-4 sm:px-6 lg:hidden"><p className="text-xs text-[#72806f]">Good morning,</p><h1 className="text-xl font-semibold">{profile.name}</h1><p className="mt-1 flex items-center gap-1 text-xs text-[#61705f]"><IconMapPin size={14} />{location}</p></div></header>; }
 function Nav({ label, icon, active, onClick }: { label: string; icon: React.ReactNode; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={`flex h-16 flex-col items-center justify-center gap-1 text-[11px] ${active ? "text-[#1f6b38]" : "text-[#7a857b]"}`}>{icon}<span className={active ? "font-medium" : ""}>{label}</span></button>; }
 function SideNav({ view, active, onClick }: { view: View; active: boolean; onClick: () => void }) { const icons = { home: <IconHome size={19} />, prices: <IconChartBar size={19} />, market: <IconBuildingStore size={19} />, sms: <IconMessage size={19} /> } as Record<string, React.ReactNode>; return <button onClick={onClick} className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium capitalize transition ${active ? "bg-[#1f6b38] text-white shadow-sm" : "text-[#59665b] hover:bg-[#eef3ea]"}`}>{icons[view]}{view}</button>; }
 function Title({ title, detail, back }: { title: string; detail: string; back?: () => void }) { return <div className="mb-4 flex items-start gap-3">{back && <button aria-label="Back" onClick={back} className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg border border-[#cbd8ca] bg-white"><IconArrowLeft size={18} /></button>}<div><h2 className="text-lg font-semibold">{title}</h2><p className="mt-1 text-xs text-[#6d7b70]">{detail}</p></div></div>; }
 
-function Landing({ disabled = false }: { disabled?: boolean }) { async function signIn() { await supabase?.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } }); } return <main className="min-h-screen bg-[#f5f2ea] text-[#18251b]"><div className="h-1.5 bg-[#16351f]" /><section className="mx-auto grid min-h-[calc(100vh-6px)] max-w-6xl items-center gap-8 px-5 py-10 lg:grid-cols-[1fr_0.9fr]"><div><Brand /><h1 className="mt-10 max-w-2xl text-4xl font-bold leading-tight sm:text-5xl">Daily market clarity for Maharashtra farmers.</h1><p className="mt-4 max-w-xl text-base leading-7 text-[#59665b]">Check mandi prices, buyer demand, net returns, and SMS-ready crop updates from one secure account.</p><button disabled={disabled} onClick={signIn} className="mt-8 flex h-12 items-center gap-3 rounded-lg bg-[#1f6b38] px-5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#18562e] disabled:opacity-50"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-white font-bold text-[#1f6b38]">G</span>Continue with Google</button>{disabled && <p className="mt-3 text-sm text-[#b42318]">Supabase environment variables are missing.</p>}</div><div className="rounded-lg border border-[#d7decf] bg-[#fcfbf7] p-4 shadow-lg"><PriceCard item={{ crop: "Onion", market: "Nashik APMC", price: 4043, unit: "quintal", date: "", source: "", previousPrice: 3980, trend: 1.6 }} /><div className="mt-3 rounded-lg bg-[#fff6db] p-4 text-sm text-[#765313]"><IconSparkles size={18} className="mb-2" />Verified buyer offers now stand out in warm amber, while prices stay grounded in KisanSetu green.</div></div></section></main>; }
+function Landing({ onLogin }: { onLogin: (profile: Profile) => void }) { const [name, setName] = useState(""); function submit(event: FormEvent) { event.preventDefault(); const profile = { name: name.trim(), village: "", taluka: "", district: "", preferred_language: "english" as Language }; window.localStorage.setItem("kisansetu-profile", JSON.stringify(profile)); onLogin(profile); } return <main className="min-h-screen bg-[#f5f2ea] text-[#18251b]"><div className="h-1.5 bg-[#16351f]" /><section className="mx-auto grid min-h-[calc(100vh-6px)] max-w-6xl items-center gap-8 px-5 py-10 lg:grid-cols-[1fr_0.9fr]"><div><Brand /><h1 className="mt-10 max-w-2xl text-4xl font-bold leading-tight sm:text-5xl">Daily market clarity for Maharashtra farmers.</h1><p className="mt-4 max-w-xl text-base leading-7 text-[#59665b]">Check mandi prices, buyer demand, net returns, and SMS-ready crop updates in a clean working prototype.</p><form onSubmit={submit} className="mt-8 max-w-sm space-y-3"><Field label="Your name"><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Aarav Patil" /></Field><button className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#1f6b38] px-5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#18562e]"><IconUserCircle size={20} />Continue</button></form></div><div className="rounded-lg border border-[#d7decf] bg-[#fcfbf7] p-4 shadow-lg"><PriceCard item={{ crop: "Onion", market: "Nashik APMC", price: 4043, unit: "quintal", date: "", source: "", previousPrice: 3980, trend: 1.6 }} /><div className="mt-3 rounded-lg bg-[#fff6db] p-4 text-sm text-[#765313]"><IconSparkles size={18} className="mb-2" />No external login setup needed. The prototype remembers this profile on the device.</div></div></section></main>; }
 
-function Onboarding({ user, onDone }: { user: User; onDone: (profile: Profile) => void }) { const meta = user.user_metadata ?? {}; const [form, setForm] = useState({ name: String(meta.full_name ?? meta.name ?? ""), village: "", taluka: "", district: "", preferred_language: "english" as Language }); async function submit(event: FormEvent) { event.preventDefault(); const profile = { id: user.id, ...form, avatar_url: String(meta.avatar_url ?? meta.picture ?? "") || null, email: user.email ?? null }; const { data } = await supabase!.from("profiles").upsert(profile).select("*").single(); onDone(data as Profile); } return <main className="flex min-h-screen items-center justify-center bg-[#f5f2ea] px-4"><Panel className="w-full max-w-xl"><Brand /><h1 className="mt-6 text-2xl font-semibold">Confirm your farm profile</h1><p className="mt-2 text-sm text-[#59665b]">Google gave us your account identity. Add your market location and language so the dashboard feels local.</p><form onSubmit={submit} className="mt-6 space-y-4"><Field label="Name"><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field><div className="grid gap-3 sm:grid-cols-3"><Field label="Village"><input required value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })} /></Field><Field label="Taluka"><input required value={form.taluka} onChange={(e) => setForm({ ...form, taluka: e.target.value })} /></Field><Field label="District"><input required value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></Field></div><Field label="Preferred language"><LanguageSelect value={form.preferred_language} onChange={(preferred_language) => setForm({ ...form, preferred_language })} /></Field><button className="h-11 w-full rounded-lg bg-[#1f6b38] text-sm font-semibold text-white transition hover:bg-[#18562e]">Enter dashboard</button></form></Panel></main>; }
-
-function ProfileScreen({ user, profile, onSave }: { user: User; profile: Profile; onSave: (profile: Profile) => void }) { const [form, setForm] = useState(profile); const [saved, setSaved] = useState(false); async function save(event: FormEvent) { event.preventDefault(); const { data } = await supabase!.from("profiles").update({ name: form.name, village: form.village, taluka: form.taluka, district: form.district, preferred_language: form.preferred_language, updated_at: new Date().toISOString() }).eq("id", profile.id).select("*").single(); onSave(data as Profile); setSaved(true); } return <div className="max-w-2xl"><Title title="Account" detail="Manage your farm location and language." /><Panel><form onSubmit={save} className="space-y-4"><div className="flex items-center gap-3">{profile.avatar_url && <img src={profile.avatar_url} alt="" className="h-14 w-14 rounded-full" />}<div><p className="text-sm font-semibold">{profile.name}</p><p className="text-xs text-[#6d7b70]">{user.email}</p></div></div><Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field><div className="grid gap-3 sm:grid-cols-3"><Field label="Village"><input value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })} /></Field><Field label="Taluka"><input value={form.taluka} onChange={(e) => setForm({ ...form, taluka: e.target.value })} /></Field><Field label="District"><input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></Field></div><Field label="Language"><LanguageSelect value={form.preferred_language} onChange={(preferred_language) => setForm({ ...form, preferred_language })} /></Field><div className="flex flex-wrap gap-2"><button className="h-10 rounded-lg bg-[#1f6b38] px-4 text-sm font-semibold text-white">Save profile</button><button type="button" onClick={() => supabase?.auth.signOut()} className="flex h-10 items-center gap-2 rounded-lg border border-[#d7decf] px-4 text-sm font-semibold text-[#59665b]"><IconLogout size={17} />Logout</button>{saved && <span className="self-center text-sm text-[#19733d]">Saved</span>}</div></form></Panel></div>; }
+function ProfileScreen({ profile, onSave, onLogout }: { profile: Profile; onSave: (profile: Profile) => void; onLogout: () => void }) { const [form, setForm] = useState(profile); const [saved, setSaved] = useState(false); function save(event: FormEvent) { event.preventDefault(); window.localStorage.setItem("kisansetu-profile", JSON.stringify(form)); onSave(form); setSaved(true); } return <div className="max-w-2xl"><Title title="Profile" detail="Manage your prototype farm profile." /><Panel><form onSubmit={save} className="space-y-4"><div className="flex items-center gap-3"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#e8f4e7] text-[#1f6b38]"><IconUserCircle size={36} /></span><div><p className="text-sm font-semibold">{profile.name}</p><p className="text-xs text-[#6d7b70]">Prototype local profile</p></div></div><Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field><div className="grid gap-3 sm:grid-cols-3"><Field label="Village"><input value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })} /></Field><Field label="Taluka"><input value={form.taluka} onChange={(e) => setForm({ ...form, taluka: e.target.value })} /></Field><Field label="District"><input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></Field></div><Field label="Language"><LanguageSelect value={form.preferred_language} onChange={(preferred_language) => setForm({ ...form, preferred_language })} /></Field><div className="flex flex-wrap gap-2"><button className="h-10 rounded-lg bg-[#1f6b38] px-4 text-sm font-semibold text-white">Save profile</button><button type="button" onClick={onLogout} className="flex h-10 items-center gap-2 rounded-lg border border-[#d7decf] px-4 text-sm font-semibold text-[#59665b]"><IconLogout size={17} />Logout</button>{saved && <span className="self-center text-sm text-[#19733d]">Saved</span>}</div></form></Panel></div>; }
 
 function LanguageSelect({ value, onChange }: { value: Language; onChange: (value: Language) => void }) { return <div className="grid grid-cols-3 gap-2">{(["english", "hindi", "marathi"] as Language[]).map((item) => <button type="button" key={item} onClick={() => onChange(item)} className={`h-10 rounded-md border text-sm capitalize ${value === item ? "border-[#1f6b38] bg-[#e8f4e7] font-semibold text-[#155c2f]" : "border-[#d7decf] bg-white text-[#59665b]"}`}>{item}</button>)}</div>; }
 
