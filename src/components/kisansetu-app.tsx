@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { IconArrowLeft, IconBuildingStore, IconCalculator, IconChartBar, IconChevronRight, IconCircleCheck, IconHome, IconLogout, IconMapPin, IconMessage, IconMinus, IconPlant2, IconPlus, IconSend, IconSparkles, IconTrendingDown, IconTrendingUp, IconUserCircle } from "@tabler/icons-react";
+import { IconArrowLeft, IconBuildingStore, IconCalculator, IconChartBar, IconChevronRight, IconCircleCheck, IconHome, IconLogout, IconMapPin, IconMessage, IconMinus, IconPlant2, IconPlus, IconSend, IconSparkles, IconTrendingDown, IconTrendingUp, IconUserCircle, IconLeaf } from "@tabler/icons-react";
 import { CROPS } from "@/lib/demo-data";
 import type { Language, Listing, PriceSnapshot } from "@/lib/types";
 
@@ -9,14 +9,14 @@ type View = "home" | "prices" | "market" | "sms" | "calculator" | "advisor" | "p
 type Chat = { role: "user" | "assistant"; content: string };
 type Profile = { name: string; village: string; taluka: string; district: string; preferred_language: Language };
 
-const money = (amount: number) => `Rs ${Math.round(amount || 0).toLocaleString("en-IN")}`;
-const cropLooks: Record<string, { mark: string; bg: string; fg: string; line: string }> = {
-  Onion: { mark: "ON", bg: "#f7ede2", fg: "#8a4b19", line: "#c9792d" },
-  Tomato: { mark: "TO", bg: "#fde8e7", fg: "#b42318", line: "#e5483f" },
-  Wheat: { mark: "WH", bg: "#fff2cc", fg: "#8a6200", line: "#d49b16" },
-  Cotton: { mark: "CT", bg: "#eaf2ff", fg: "#2457a6", line: "#5b8def" },
-  Soybean: { mark: "SO", bg: "#eaf7df", fg: "#357a28", line: "#70ad47" },
-  Potato: { mark: "PO", bg: "#f0eadf", fg: "#6e5132", line: "#9a734c" },
+const money = (amount: number) => `₹${Math.round(amount || 0).toLocaleString("en-IN")}`;
+const cropLooks: Record<string, { mark: string; bg: string; fg: string; line: string; gradFrom: string; gradTo: string }> = {
+  Onion:   { mark: "ON", bg: "#f7ede2", fg: "#8a4b19", line: "#c9792d", gradFrom: "#f7ede2", gradTo: "#f0ddc8" },
+  Tomato:  { mark: "TO", bg: "#fde8e7", fg: "#b42318", line: "#e5483f", gradFrom: "#fde8e7", gradTo: "#f8d0cd" },
+  Wheat:   { mark: "WH", bg: "#fff2cc", fg: "#8a6200", line: "#d49b16", gradFrom: "#fff2cc", gradTo: "#ffe8a3" },
+  Cotton:  { mark: "CT", bg: "#eaf2ff", fg: "#2457a6", line: "#5b8def", gradFrom: "#eaf2ff", gradTo: "#d5e5ff" },
+  Soybean: { mark: "SO", bg: "#eaf7df", fg: "#357a28", line: "#70ad47", gradFrom: "#eaf7df", gradTo: "#d4ecc5" },
+  Potato:  { mark: "PO", bg: "#f0eadf", fg: "#6e5132", line: "#9a734c", gradFrom: "#f0eadf", gradTo: "#e2d7c5" },
 };
 
 const buyerDemand = [
@@ -25,20 +25,112 @@ const buyerDemand = [
   { buyer: "Vidarbha Cotton Co-op", crop: "Cotton", quantity: "80 qtl", offer: 7420, location: "Nagpur APMC" },
 ];
 
-function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-lg border border-[#dbe3d5] bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${className}`}>{children}</section>;
+/* ─── SVG Crop Icons ─── */
+function CropIcon({ crop, size = 24 }: { crop: string; size?: number }) {
+  const s = size;
+  switch (crop) {
+    case "Onion":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <ellipse cx="12" cy="15" rx="7" ry="6.5" fill="#c9792d" opacity="0.85" />
+          <ellipse cx="12" cy="14.5" rx="5" ry="5" fill="#e8a756" />
+          <path d="M12 3c0 0-2 3-2 6s1.5 4 2 4 2-1 2-4-2-6-2-6z" fill="#6daa4f" />
+          <path d="M11 3.5c-1 0.5-2.5 2-2 4" stroke="#4a8a35" strokeWidth="0.8" fill="none" />
+        </svg>
+      );
+    case "Tomato":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="13" r="7" fill="#e5483f" />
+          <circle cx="12" cy="13" r="5.5" fill="#f06b60" opacity="0.5" />
+          <ellipse cx="12" cy="7.5" rx="3" ry="1.5" fill="#5daa4f" />
+          <path d="M12 4v4" stroke="#4a8a35" strokeWidth="1.2" strokeLinecap="round" />
+          <circle cx="9.5" cy="11.5" r="0.6" fill="#fff" opacity="0.3" />
+        </svg>
+      );
+    case "Wheat":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <path d="M12 21V8" stroke="#d49b16" strokeWidth="1.5" strokeLinecap="round" />
+          <ellipse cx="12" cy="6" rx="2" ry="3.5" fill="#e8b84a" />
+          <ellipse cx="10" cy="7.5" rx="1.5" ry="2.5" fill="#d49b16" transform="rotate(-20 10 7.5)" />
+          <ellipse cx="14" cy="7.5" rx="1.5" ry="2.5" fill="#d49b16" transform="rotate(20 14 7.5)" />
+          <path d="M9 13l3-2 3 2" stroke="#c9a033" strokeWidth="0.8" fill="none" />
+          <path d="M9.5 16l2.5-1.5 2.5 1.5" stroke="#c9a033" strokeWidth="0.8" fill="none" />
+        </svg>
+      );
+    case "Cotton":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="11" r="4" fill="#f0f4ff" stroke="#b8ccef" strokeWidth="0.5" />
+          <circle cx="9" cy="9.5" r="3" fill="#e8eef9" stroke="#b8ccef" strokeWidth="0.5" />
+          <circle cx="15" cy="9.5" r="3" fill="#e8eef9" stroke="#b8ccef" strokeWidth="0.5" />
+          <circle cx="10.5" cy="13" r="2.5" fill="#f0f4ff" stroke="#b8ccef" strokeWidth="0.5" />
+          <circle cx="13.5" cy="13" r="2.5" fill="#f0f4ff" stroke="#b8ccef" strokeWidth="0.5" />
+          <path d="M12 15v5" stroke="#5daa4f" strokeWidth="1.2" strokeLinecap="round" />
+          <path d="M10 17l2-2 2 2" stroke="#5daa4f" strokeWidth="0.8" fill="none" />
+        </svg>
+      );
+    case "Soybean":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <ellipse cx="10" cy="13" rx="4" ry="5.5" fill="#8cc374" transform="rotate(-10 10 13)" />
+          <ellipse cx="14" cy="13" rx="4" ry="5.5" fill="#70ad47" transform="rotate(10 14 13)" />
+          <ellipse cx="10.5" cy="12" rx="1.5" ry="2" fill="#a3d48e" />
+          <ellipse cx="13.5" cy="12" rx="1.5" ry="2" fill="#93c97a" />
+          <path d="M12 4v4" stroke="#4a8a35" strokeWidth="1" strokeLinecap="round" />
+          <path d="M10 5c1.5 0.5 2.5 2 2 3" stroke="#5daa4f" strokeWidth="0.8" fill="none" />
+        </svg>
+      );
+    case "Potato":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <ellipse cx="12" cy="14" rx="7" ry="5" fill="#c4a46e" />
+          <ellipse cx="12" cy="13.5" rx="5.5" ry="4" fill="#d4b882" />
+          <circle cx="9" cy="12.5" r="0.7" fill="#b8975c" />
+          <circle cx="14" cy="13" r="0.6" fill="#b8975c" />
+          <circle cx="11" cy="15" r="0.5" fill="#b8975c" />
+          <path d="M11 7c0 0 0.5-3 1-3s1 3 1 3" stroke="#6daa4f" strokeWidth="0.8" fill="none" />
+        </svg>
+      );
+    default:
+      return <IconLeaf size={s * 0.75} />;
+  }
+}
+
+/* ─── Shared UI Primitives ─── */
+function Panel({ children, className = "", accent = false }: { children: React.ReactNode; className?: string; accent?: boolean }) {
+  return (
+    <section className={`card-lift rounded-xl border bg-white p-5 shadow-card ${accent ? "border-kisan-terra-400/40" : "border-kisan-cream-400/80"} ${className}`}>
+      {children}
+    </section>
+  );
 }
 
 function CropBadge({ crop, size = "normal" }: { crop: string; size?: "normal" | "small" }) {
-  const look = cropLooks[crop] ?? { mark: crop.slice(0, 2).toUpperCase(), bg: "#ecf7ee", fg: "#26733b", line: "#4b9b5a" };
-  const dimensions = size === "small" ? "h-8 w-8 text-[10px]" : "h-12 w-12 text-xs";
-  return <span className={`relative flex ${dimensions} shrink-0 items-center justify-center overflow-hidden rounded-lg font-bold`} style={{ background: look.bg, color: look.fg }}><span className="absolute -bottom-2 h-6 w-10 rounded-[50%] opacity-20" style={{ background: look.line }} /><span className="relative">{look.mark}</span><span className="sr-only">{crop}</span></span>;
+  const look = cropLooks[crop] ?? { mark: crop.slice(0, 2).toUpperCase(), bg: "#ecf7ee", fg: "#26733b", line: "#4b9b5a", gradFrom: "#ecf7ee", gradTo: "#d4ecc5" };
+  const dim = size === "small" ? "h-9 w-9" : "h-12 w-12";
+  const iconSize = size === "small" ? 18 : 24;
+  return (
+    <span
+      className={`relative flex ${dim} shrink-0 items-center justify-center overflow-hidden rounded-xl`}
+      style={{ background: `linear-gradient(145deg, ${look.gradFrom}, ${look.gradTo})` }}
+    >
+      <CropIcon crop={crop} size={iconSize} />
+      <span className="sr-only">{crop}</span>
+    </span>
+  );
 }
 
 function Trend({ value }: { value: number }) {
-  if (value === 0) return <span className="inline-flex items-center gap-1 text-xs font-medium text-[#7a8178]"><IconMinus size={15} />0.0%</span>;
+  if (value === 0) return <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500"><IconMinus size={13} />0.0%</span>;
   const up = value > 0;
-  return <span className={`inline-flex items-center gap-1 text-xs font-medium ${up ? "text-[#19733d]" : "text-[#b42318]"}`}>{up ? <IconTrendingUp size={15} /> : <IconTrendingDown size={15} />}{Math.abs(value).toFixed(1)}%</span>;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${up ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+      {up ? <IconTrendingUp size={14} /> : <IconTrendingDown size={14} />}
+      {up ? "+" : ""}{Math.abs(value).toFixed(1)}%
+    </span>
+  );
 }
 
 function Sparkline({ item }: { item: PriceSnapshot }) {
@@ -48,14 +140,85 @@ function Sparkline({ item }: { item: PriceSnapshot }) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const spread = max - min || 1;
-  const points = values.map((value, index) => `${(index / 6) * 100},${34 - ((value - min) / spread) * 28}`).join(" ");
-  return <svg aria-label={`${item.crop} 7 day trend`} viewBox="0 0 100 38" className="h-10 w-full overflow-visible"><polyline fill="none" stroke={look.line} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" points={points} /><line x1="0" y1="36" x2="100" y2="36" stroke="#e8eee6" strokeWidth="1" /></svg>;
+  const points = values.map((value, index) => `${(index / 6) * 100},${32 - ((value - min) / spread) * 24}`).join(" ");
+  const areaPoints = `0,34 ${points} 100,34`;
+  const up = item.trend >= 0;
+  return (
+    <svg aria-label={`${item.crop} 7 day trend`} viewBox="0 0 100 38" className="h-12 w-full overflow-visible">
+      <defs>
+        <linearGradient id={`grad-${item.crop}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={look.line} stopOpacity="0.15" />
+          <stop offset="100%" stopColor={look.line} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon fill={`url(#grad-${item.crop})`} points={areaPoints} />
+      <polyline fill="none" stroke={look.line} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
+      {/* End dot */}
+      <circle cx="100" cy={32 - ((values[6] - min) / spread) * 24} r="3" fill={up ? "#1b6e34" : "#dc2626"} />
+      {/* Day labels */}
+      {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+        <text key={i} x={(i / 6) * 100} y="38" fontSize="5" fill="#9e9680" textAnchor="middle">{d}</text>
+      ))}
+    </svg>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="rounded-xl border border-kisan-cream-400/60 bg-white p-5 shadow-card">
+      <div className="flex items-start gap-3">
+        <div className="skeleton h-12 w-12 rounded-xl" />
+        <div className="flex-1 space-y-2">
+          <div className="skeleton h-4 w-20 rounded-md" />
+          <div className="skeleton h-3 w-32 rounded-md" />
+        </div>
+        <div className="skeleton h-5 w-14 rounded-full" />
+      </div>
+      <div className="mt-4 space-y-2">
+        <div className="skeleton h-3 w-16 rounded-md" />
+        <div className="skeleton h-8 w-28 rounded-md" />
+      </div>
+      <div className="mt-3 skeleton h-10 w-full rounded-md" />
+    </div>
+  );
+}
+
+function SkeletonStat() {
+  return (
+    <div className="rounded-xl border border-kisan-cream-400/60 bg-white p-4 shadow-card">
+      <div className="skeleton h-3 w-16 rounded-md" />
+      <div className="skeleton mt-2 h-5 w-12 rounded-md" />
+    </div>
+  );
 }
 
 function PriceCard({ item }: { item: PriceSnapshot }) {
-  return <Panel><div className="flex items-start gap-3"><CropBadge crop={item.crop} /><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-[#18251b]">{item.crop}</p><p className="mt-1 truncate text-xs text-[#6d7b70]">{item.market}</p></div><Trend value={item.trend} /></div><div className="mt-4"><p className="text-[11px] uppercase tracking-[0.08em] text-[#7a857b]">per quintal</p><p className="mt-1 font-mono text-3xl font-bold tabular-nums text-[#102016]">{money(item.price)}</p></div><div className="mt-2"><Sparkline item={item} /></div></Panel>;
+  return (
+    <Panel>
+      <div className="flex items-start gap-3">
+        <CropBadge crop={item.crop} />
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-bold text-[#18251b]">{item.crop}</p>
+          <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-kisan-cream-200 px-2 py-0.5 text-[11px] font-medium text-kisan-cream-800">
+            <IconMapPin size={11} />{item.market}
+          </span>
+        </div>
+        <Trend value={item.trend} />
+      </div>
+      <div className="mt-4">
+        <p className="text-[10px] uppercase tracking-[0.1em] font-semibold text-kisan-cream-700">per quintal</p>
+        <p className="mt-1 font-mono text-[28px] font-extrabold leading-none tabular-nums text-[#0d3519]">
+          {money(item.price)}
+        </p>
+      </div>
+      <div className="mt-3">
+        <Sparkline item={item} />
+      </div>
+    </Panel>
+  );
 }
 
+/* ─── Main App Shell ─── */
 export function KisanSetuApp() {
   const [view, setView] = useState<View>("home");
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -74,62 +237,531 @@ export function KisanSetuApp() {
   const leader = useMemo(() => [...prices].sort((a, b) => b.trend - a.trend)[0], [prices]);
   const language = profile?.preferred_language ?? "english";
 
-  if (!profileReady) return <main className="flex min-h-screen items-center justify-center bg-[#f5f2ea] text-sm text-[#536155]">Opening KisanSetu...</main>;
+  if (!profileReady) return (
+    <main className="flex min-h-screen items-center justify-center bg-kisan-cream-100 text-sm text-kisan-cream-700">
+      <div className="flex flex-col items-center gap-3 animate-fade-in">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-kisan-green-500 to-kisan-green-700 text-white shadow-btn">
+          <IconPlant2 size={28} />
+        </span>
+        <span className="font-semibold text-kisan-green-700">Opening KisanSetu…</span>
+      </div>
+    </main>
+  );
   if (!profile) return <Landing onLogin={setProfile} />;
 
-  return <main className="min-h-screen bg-[#f5f2ea] text-[#18251b]">
-    <div className="h-1.5 bg-[#16351f]" aria-hidden="true" />
-    <div className="mx-auto flex min-h-[calc(100vh-6px)] w-full max-w-[1440px] lg:px-6">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r border-[#d7decf] bg-[#fcfbf7] px-4 py-5 lg:block">
-        <Brand />
-        <nav className="mt-8 space-y-2">{(["home", "prices", "market", "sms"] as View[]).map((item) => <SideNav key={item} view={item} active={view === item} onClick={() => setView(item)} />)}</nav>
-      </aside>
-      <div className="min-w-0 flex-1 pb-24 lg:pb-10">
-        <Header profile={profile} setView={setView} />
-        <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 lg:px-8">
-          {view === "home" && <Home prices={prices} loading={loading} leader={leader} go={setView} />}
-          {view === "prices" && <Prices prices={prices} loading={loading} />}
-          {view === "market" && <Market />}
-          {view === "sms" && <Sms prices={prices} />}
-          {view === "calculator" && <Calculator prices={prices} onBack={() => setView("home")} />}
-          {view === "advisor" && <Advisor prices={prices} language={language} onBack={() => setView("home")} />}
-          {view === "profile" && <ProfileScreen profile={profile} onSave={setProfile} onLogout={() => { window.localStorage.removeItem("kisansetu-profile"); setProfile(null); setView("home"); }} />}
+  return (
+    <main className="min-h-screen bg-kisan-cream-100 text-[#18251b]">
+      {/* Top accent bar — gradient */}
+      <div className="h-1 bg-gradient-to-r from-kisan-green-700 via-kisan-green-500 to-kisan-terra-500" aria-hidden="true" />
+
+      <div className="mx-auto flex min-h-[calc(100vh-4px)] w-full max-w-[1440px] lg:px-0">
+        {/* ─── Sidebar ─── */}
+        <aside className="topo-pattern sticky top-0 hidden h-screen w-[270px] shrink-0 border-r border-kisan-cream-400 bg-gradient-to-b from-kisan-cream-50 to-kisan-cream-200 lg:flex lg:flex-col">
+          {/* Brand block */}
+          <div className="px-5 pt-6 pb-5 border-b border-kisan-cream-400">
+            <Brand />
+            <p className="mt-2 text-[11px] leading-4 text-kisan-cream-700">Live market prices &amp; verified buyer access for Maharashtra farmers</p>
+          </div>
+
+          {/* Nav links */}
+          <nav className="flex-1 px-3 py-4 space-y-1">
+            {(["home", "prices", "market", "sms"] as View[]).map((item) => (
+              <SideNav key={item} view={item} active={view === item} onClick={() => setView(item)} />
+            ))}
+          </nav>
+
+          {/* Sidebar footer */}
+          <div className="px-5 py-4 border-t border-kisan-cream-400">
+            <button onClick={() => setView("advisor")} className="flex w-full items-center gap-2.5 rounded-xl bg-gradient-to-r from-kisan-terra-50 to-kisan-terra-100 border border-kisan-terra-200 px-3 py-2.5 text-left transition hover:shadow-sm">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-kisan-terra-400 text-white">
+                <IconSparkles size={16} />
+              </span>
+              <div>
+                <p className="text-xs font-bold text-kisan-terra-800">AI Advisor</p>
+                <p className="text-[10px] text-kisan-terra-600">Ask market questions</p>
+              </div>
+            </button>
+          </div>
+        </aside>
+
+        {/* ─── Content ─── */}
+        <div className="min-w-0 flex-1 pb-24 lg:pb-10">
+          <Header profile={profile} setView={setView} />
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+            {view === "home" && <Home prices={prices} loading={loading} leader={leader} go={setView} />}
+            {view === "prices" && <Prices prices={prices} loading={loading} />}
+            {view === "market" && <Market />}
+            {view === "sms" && <Sms prices={prices} />}
+            {view === "calculator" && <Calculator prices={prices} onBack={() => setView("home")} />}
+            {view === "advisor" && <Advisor prices={prices} language={language} onBack={() => setView("home")} />}
+            {view === "profile" && <ProfileScreen profile={profile} onSave={setProfile} onLogout={() => { window.localStorage.removeItem("kisansetu-profile"); setProfile(null); setView("home"); }} />}
+          </div>
         </div>
       </div>
+
+      {/* ─── Mobile bottom nav ─── */}
+      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-kisan-cream-400 bg-white/95 backdrop-blur-md lg:hidden">
+        <div className="mx-auto grid max-w-xl grid-cols-4">
+          <Nav label="Home" active={view === "home"} icon={<IconHome size={22} />} onClick={() => setView("home")} />
+          <Nav label="Prices" active={view === "prices"} icon={<IconChartBar size={22} />} onClick={() => setView("prices")} />
+          <Nav label="Market" active={view === "market"} icon={<IconBuildingStore size={22} />} onClick={() => setView("market")} />
+          <Nav label="SMS" active={view === "sms"} icon={<IconMessage size={22} />} onClick={() => setView("sms")} />
+        </div>
+      </nav>
+    </main>
+  );
+}
+
+/* ─── Brand ─── */
+function Brand() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-kisan-green-500 to-kisan-green-700 text-white shadow-btn">
+        <IconPlant2 size={21} />
+      </span>
+      <div>
+        <p className="text-[15px] font-extrabold tracking-tight text-kisan-green-800">KisanSetu</p>
+        <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-kisan-cream-700">Maharashtra</p>
+      </div>
     </div>
-    <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-[#cbd8ca] bg-white lg:hidden"><div className="mx-auto grid max-w-xl grid-cols-4"><Nav label="Home" active={view === "home"} icon={<IconHome size={20} />} onClick={() => setView("home")} /><Nav label="Prices" active={view === "prices"} icon={<IconChartBar size={20} />} onClick={() => setView("prices")} /><Nav label="Market" active={view === "market"} icon={<IconBuildingStore size={20} />} onClick={() => setView("market")} /><Nav label="SMS" active={view === "sms"} icon={<IconMessage size={20} />} onClick={() => setView("sms")} /></div></nav>
-  </main>;
+  );
 }
 
-function Brand() { return <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1f6b38] text-white"><IconPlant2 size={19} /></span><div><p className="text-sm font-bold">KisanSetu</p><p className="text-[11px] text-[#72806f]">Maharashtra market service</p></div></div>; }
-function Header({ profile, setView }: { profile: Profile; setView: (view: View) => void }) { const location = [profile.village, profile.taluka, profile.district].filter(Boolean).join(", ") || "Set your farm location"; return <header className="border-b border-[#d7decf] bg-[#fcfbf7]"><div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8"><div className="lg:hidden"><Brand /></div><div className="hidden lg:block"><p className="text-xs text-[#72806f]">Good morning,</p><h1 className="text-2xl font-semibold">{profile.name}</h1><p className="mt-1 flex items-center gap-1 text-sm text-[#61705f]"><IconMapPin size={15} />{location}</p></div><button onClick={() => setView("profile")} className="flex items-center gap-2 rounded-full border border-[#d7decf] bg-white p-1 pr-3 text-sm transition hover:border-[#d49b16] hover:shadow-sm"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e8f4e7] text-[#1f6b38]"><IconUserCircle size={24} /></span><span className="hidden sm:inline">Account</span></button></div><div className="px-4 pb-4 sm:px-6 lg:hidden"><p className="text-xs text-[#72806f]">Good morning,</p><h1 className="text-xl font-semibold">{profile.name}</h1><p className="mt-1 flex items-center gap-1 text-xs text-[#61705f]"><IconMapPin size={14} />{location}</p></div></header>; }
-function Nav({ label, icon, active, onClick }: { label: string; icon: React.ReactNode; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={`flex h-16 flex-col items-center justify-center gap-1 text-[11px] ${active ? "text-[#1f6b38]" : "text-[#7a857b]"}`}>{icon}<span className={active ? "font-medium" : ""}>{label}</span></button>; }
-function SideNav({ view, active, onClick }: { view: View; active: boolean; onClick: () => void }) { const icons = { home: <IconHome size={19} />, prices: <IconChartBar size={19} />, market: <IconBuildingStore size={19} />, sms: <IconMessage size={19} /> } as Record<string, React.ReactNode>; return <button onClick={onClick} className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium capitalize transition ${active ? "bg-[#1f6b38] text-white shadow-sm" : "text-[#59665b] hover:bg-[#eef3ea]"}`}>{icons[view]}{view}</button>; }
-function Title({ title, detail, back }: { title: string; detail: string; back?: () => void }) { return <div className="mb-4 flex items-start gap-3">{back && <button aria-label="Back" onClick={back} className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg border border-[#cbd8ca] bg-white"><IconArrowLeft size={18} /></button>}<div><h2 className="text-lg font-semibold">{title}</h2><p className="mt-1 text-xs text-[#6d7b70]">{detail}</p></div></div>; }
+/* ─── Header ─── */
+function Header({ profile, setView }: { profile: Profile; setView: (view: View) => void }) {
+  const location = [profile.village, profile.taluka, profile.district].filter(Boolean).join(", ") || "Set your farm location";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-function Landing({ onLogin }: { onLogin: (profile: Profile) => void }) { const [name, setName] = useState(""); function submit(event: FormEvent) { event.preventDefault(); const profile = { name: name.trim(), village: "", taluka: "", district: "", preferred_language: "english" as Language }; window.localStorage.setItem("kisansetu-profile", JSON.stringify(profile)); onLogin(profile); } return <main className="min-h-screen bg-[#f5f2ea] text-[#18251b]"><div className="h-1.5 bg-[#16351f]" /><section className="mx-auto grid min-h-[calc(100vh-6px)] max-w-6xl items-center gap-8 px-5 py-10 lg:grid-cols-[1fr_0.9fr]"><div><Brand /><h1 className="mt-10 max-w-2xl text-4xl font-bold leading-tight sm:text-5xl">Daily market clarity for Maharashtra farmers.</h1><p className="mt-4 max-w-xl text-base leading-7 text-[#59665b]">Check mandi prices, buyer demand, net returns, and SMS-ready crop updates in a clean working prototype.</p><form onSubmit={submit} className="mt-8 max-w-sm space-y-3"><Field label="Your name"><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Aarav Patil" /></Field><button className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#1f6b38] px-5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#18562e]"><IconUserCircle size={20} />Continue</button></form></div><div className="rounded-lg border border-[#d7decf] bg-[#fcfbf7] p-4 shadow-lg"><PriceCard item={{ crop: "Onion", market: "Nashik APMC", price: 4043, unit: "quintal", date: "", source: "", previousPrice: 3980, trend: 1.6 }} /><div className="mt-3 rounded-lg bg-[#fff6db] p-4 text-sm text-[#765313]"><IconSparkles size={18} className="mb-2" />No external login setup needed. The prototype remembers this profile on the device.</div></div></section></main>; }
-
-function ProfileScreen({ profile, onSave, onLogout }: { profile: Profile; onSave: (profile: Profile) => void; onLogout: () => void }) { const [form, setForm] = useState(profile); const [saved, setSaved] = useState(false); function save(event: FormEvent) { event.preventDefault(); window.localStorage.setItem("kisansetu-profile", JSON.stringify(form)); onSave(form); setSaved(true); } return <div className="max-w-2xl"><Title title="Profile" detail="Manage your prototype farm profile." /><Panel><form onSubmit={save} className="space-y-4"><div className="flex items-center gap-3"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#e8f4e7] text-[#1f6b38]"><IconUserCircle size={36} /></span><div><p className="text-sm font-semibold">{profile.name}</p><p className="text-xs text-[#6d7b70]">Prototype local profile</p></div></div><Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field><div className="grid gap-3 sm:grid-cols-3"><Field label="Village"><input value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })} /></Field><Field label="Taluka"><input value={form.taluka} onChange={(e) => setForm({ ...form, taluka: e.target.value })} /></Field><Field label="District"><input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></Field></div><Field label="Language"><LanguageSelect value={form.preferred_language} onChange={(preferred_language) => setForm({ ...form, preferred_language })} /></Field><div className="flex flex-wrap gap-2"><button className="h-10 rounded-lg bg-[#1f6b38] px-4 text-sm font-semibold text-white">Save profile</button><button type="button" onClick={onLogout} className="flex h-10 items-center gap-2 rounded-lg border border-[#d7decf] px-4 text-sm font-semibold text-[#59665b]"><IconLogout size={17} />Logout</button>{saved && <span className="self-center text-sm text-[#19733d]">Saved</span>}</div></form></Panel></div>; }
-
-function LanguageSelect({ value, onChange }: { value: Language; onChange: (value: Language) => void }) { return <div className="grid grid-cols-3 gap-2">{(["english", "hindi", "marathi"] as Language[]).map((item) => <button type="button" key={item} onClick={() => onChange(item)} className={`h-10 rounded-md border text-sm capitalize ${value === item ? "border-[#1f6b38] bg-[#e8f4e7] font-semibold text-[#155c2f]" : "border-[#d7decf] bg-white text-[#59665b]"}`}>{item}</button>)}</div>; }
-
-function Home({ prices, loading, leader, go }: { prices: PriceSnapshot[]; loading: boolean; leader?: PriceSnapshot; go: (view: View) => void }) { return <div className="space-y-5"><div className="grid grid-cols-3 gap-2 lg:gap-4"><Status label="Market records" value={loading ? "..." : `${prices.length} crops`} /><Status label="Buyer requests" value="12 open" /><Status label="Verified sellers" value="48 active" /></div><Panel className="border-[#d49b16] bg-[#fff8df]"><div className="flex gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#9a6b00]"><IconSparkles size={20} /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold">Market assistant</p><p className="mt-1 text-sm leading-5 text-[#665b42]">{leader ? `${leader.crop} has the strongest movement today at ${Math.abs(leader.trend).toFixed(1)}%. Ask about selling, storage, nearby buyers, or net returns.` : "Ask about selling, storage, nearby buyers, or net returns."}</p><button onClick={() => go("advisor")} className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#155c2f]">Talk to assistant <IconChevronRight size={16} /></button></div></div></Panel><div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold">Today&apos;s crop prices</h2><p className="mt-1 text-xs text-[#6d7b70]">Maharashtra weighted market average</p></div><button onClick={() => go("prices")} className="text-sm font-semibold text-[#1f6b38]">All prices</button></div>{loading ? <Panel><p className="text-sm text-[#6d7b70]">Loading verified price records...</p></Panel> : <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">{prices.slice(0, 6).map((item) => <PriceCard key={item.crop} item={item} />)}</div>}<div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><ActionButton onClick={() => go("market")} icon={<IconBuildingStore size={21} />} title="Find a buyer" text="Live demand from local traders" /><ActionButton onClick={() => go("calculator")} icon={<IconCalculator size={21} />} title="Net return" text="Calculate travel and packing costs" /></div></div>; }
-function Status({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-[#d9e0d7] bg-white p-3 shadow-sm"><p className="text-[11px] leading-4 text-[#6d7b70]">{label}</p><p className="mt-1 text-sm font-semibold text-[#18251b]">{value}</p></div>; }
-function ActionButton({ onClick, icon, title, text }: { onClick: () => void; icon: React.ReactNode; title: string; text: string }) { return <button onClick={onClick} className="rounded-lg border border-[#cbd8ca] bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#d49b16] hover:shadow-md"><span className="text-[#1f6b38]">{icon}</span><p className="mt-3 text-sm font-semibold">{title}</p><p className="mt-1 text-xs leading-4 text-[#6d7b70]">{text}</p></button>; }
-function Prices({ prices, loading }: { prices: PriceSnapshot[]; loading: boolean }) { return <><Title title="Mandi price board" detail="Daily prices averaged across reporting markets" />{loading ? <Panel>Loading market records...</Panel> : <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">{prices.map((item) => <PriceCard key={item.crop} item={item} />)}</div>}</>; }
-
-function Calculator({ prices, onBack }: { prices: PriceSnapshot[]; onBack: () => void }) {
-  const [crop, setCrop] = useState("Onion"); const [quantity, setQuantity] = useState(10); const [distance, setDistance] = useState(25);
-  const chosen = prices.find((item) => item.crop === crop); const gross = (chosen?.price ?? 0) * quantity; const transport = distance * 8; const packing = gross * 0.05; const net = gross - transport - packing;
-  return <div className="max-w-3xl space-y-4"><Title title="Net return calculator" detail="Estimate your sale value before you transport." back={onBack} /><Panel><div className="space-y-4"><Field label="Crop"><select value={crop} onChange={(e) => setCrop(e.target.value)}>{CROPS.map((item) => <option key={item}>{item}</option>)}</select></Field><div className="grid grid-cols-2 gap-3"><Field label="Quantity (qtl)"><input type="number" min="0" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} /></Field><Field label="Distance (km)"><input type="number" min="0" value={distance} onChange={(e) => setDistance(Number(e.target.value))} /></Field></div></div></Panel><Panel className="border-[#a9cda9]"><p className="text-xs text-[#6d7b70]">Estimated return using {chosen ? money(chosen.price) : "current price"}/qtl</p><div className="mt-4 space-y-3 text-sm"><Row label="Gross sale value" value={money(gross)} /><Row label="Transport (Rs 8/km)" value={`-${money(transport)}`} /><Row label="Packing (5%)" value={`-${money(packing)}`} /><div className="flex justify-between border-t border-[#dce7db] pt-3 text-base font-semibold"><span>Expected net return</span><span className="text-[#19733d]">{money(net)}</span></div></div></Panel></div>;
+  return (
+    <header className="border-b border-kisan-cream-400 bg-white/80 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <div className="lg:hidden"><Brand /></div>
+        <div className="hidden lg:block">
+          <p className="text-xs font-medium text-kisan-cream-700">{greeting},</p>
+          <h1 className="text-2xl font-bold text-kisan-green-900">{profile.name}</h1>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-kisan-cream-800">
+            <IconMapPin size={15} className="text-kisan-terra-500" />{location}
+          </p>
+        </div>
+        <button onClick={() => setView("profile")} className="group flex items-center gap-2.5 rounded-full border border-kisan-cream-400 bg-white p-1 pr-3.5 text-sm font-medium transition hover:border-kisan-terra-400 hover:shadow-elevated">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-kisan-green-50 to-kisan-green-100 text-kisan-green-600 transition group-hover:from-kisan-green-100 group-hover:to-kisan-green-200">
+            <IconUserCircle size={22} />
+          </span>
+          <span className="hidden sm:inline text-kisan-green-800">Account</span>
+        </button>
+      </div>
+      {/* Mobile greeting sub-header */}
+      <div className="px-4 pb-4 sm:px-6 lg:hidden">
+        <p className="text-xs font-medium text-kisan-cream-700">{greeting},</p>
+        <h1 className="text-xl font-bold text-kisan-green-900">{profile.name}</h1>
+        <p className="mt-1 flex items-center gap-1 text-xs text-kisan-cream-800">
+          <IconMapPin size={13} className="text-kisan-terra-500" />{location}
+        </p>
+      </div>
+    </header>
+  );
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-sm text-[#304133]"><span className="mb-1.5 block">{label}</span><span className="block [&_input]:h-11 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-[#cbd8ca] [&_input]:bg-white [&_input]:px-3 [&_select]:h-11 [&_select]:w-full [&_select]:rounded-md [&_select]:border [&_select]:border-[#cbd8ca] [&_select]:bg-white [&_select]:px-3">{children}</span></label>; }
-function Row({ label, value }: { label: string; value: string }) { return <div className="flex justify-between text-[#566457]"><span>{label}</span><span>{value}</span></div>; }
 
+/* ─── Navigation ─── */
+function Nav({ label, icon, active, onClick }: { label: string; icon: React.ReactNode; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={`flex h-[60px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${active ? "text-kisan-green-600" : "text-kisan-cream-700 hover:text-kisan-green-500"}`}>
+      <span className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all ${active ? "bg-kisan-green-50 shadow-sm" : ""}`}>{icon}</span>
+      <span className={active ? "font-bold" : ""}>{label}</span>
+      {active && <span className="h-0.5 w-4 rounded-full bg-kisan-green-500 mt-0.5" />}
+    </button>
+  );
+}
+
+function SideNav({ view, active, onClick }: { view: View; active: boolean; onClick: () => void }) {
+  const icons = {
+    home: <IconHome size={19} />,
+    prices: <IconChartBar size={19} />,
+    market: <IconBuildingStore size={19} />,
+    sms: <IconMessage size={19} />,
+  } as Record<string, React.ReactNode>;
+
+  const labels: Record<string, string> = {
+    home: "Dashboard",
+    prices: "Price Board",
+    market: "Market Linkage",
+    sms: "SMS Service",
+  };
+
+  return (
+    <button onClick={onClick} className={`group flex h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all ${active ? "tab-active text-white shadow-sm" : "text-kisan-cream-800 hover:bg-kisan-cream-300/60 hover:text-kisan-green-700"}`}>
+      <span className={active ? "" : "text-kisan-cream-700 group-hover:text-kisan-green-600"}>{icons[view]}</span>
+      {labels[view] ?? view}
+      {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white/70" />}
+    </button>
+  );
+}
+
+/* ─── Shared Sub-Components ─── */
+function Title({ title, detail, back }: { title: string; detail: string; back?: () => void }) {
+  return (
+    <div className="mb-5 flex items-start gap-3">
+      {back && (
+        <button aria-label="Back" onClick={back} className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl border border-kisan-cream-400 bg-white shadow-card transition hover:border-kisan-green-300 hover:shadow-elevated">
+          <IconArrowLeft size={18} />
+        </button>
+      )}
+      <div>
+        <h2 className="text-xl font-bold text-kisan-green-900">{title}</h2>
+        <p className="mt-1 text-sm text-kisan-cream-700">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block text-sm font-medium text-[#304133]">
+      <span className="mb-1.5 block text-[13px]">{label}</span>
+      <span className="block [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-kisan-cream-400 [&_input]:bg-white [&_input]:px-3.5 [&_input]:text-sm [&_input]:transition [&_select]:h-11 [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:border-kisan-cream-400 [&_select]:bg-white [&_select]:px-3.5 [&_select]:text-sm [&_select]:transition">
+        {children}
+      </span>
+    </label>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return <div className="flex justify-between text-sm text-kisan-cream-800"><span>{label}</span><span className="font-medium">{value}</span></div>;
+}
+
+function Tab({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={`min-w-0 rounded-xl px-2 py-2.5 text-xs font-medium transition-all ${active ? "tab-active text-white" : "text-kisan-cream-800 hover:bg-kisan-cream-300/50"}`}>
+      {children}
+    </button>
+  );
+}
+
+function LanguageSelect({ value, onChange }: { value: Language; onChange: (value: Language) => void }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {(["english", "hindi", "marathi"] as Language[]).map((item) => (
+        <button type="button" key={item} onClick={() => onChange(item)}
+          className={`h-11 rounded-xl border text-sm capitalize transition-all ${value === item ? "border-kisan-green-500 bg-kisan-green-50 font-bold text-kisan-green-700 shadow-glow-green" : "border-kisan-cream-400 bg-white text-kisan-cream-800 hover:border-kisan-green-300"}`}>
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+
+/* ════════════════════════════════════════
+     SCREEN 0 — Landing
+   ════════════════════════════════════════ */
+function Landing({ onLogin }: { onLogin: (profile: Profile) => void }) {
+  const [name, setName] = useState("");
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const profile = { name: name.trim(), village: "", taluka: "", district: "", preferred_language: "english" as Language };
+    window.localStorage.setItem("kisansetu-profile", JSON.stringify(profile));
+    onLogin(profile);
+  }
+
+  return (
+    <main className="min-h-screen bg-kisan-cream-100 text-[#18251b]">
+      <div className="h-1 bg-gradient-to-r from-kisan-green-700 via-kisan-green-500 to-kisan-terra-500" />
+      <section className="mx-auto grid min-h-[calc(100vh-4px)] max-w-6xl items-center gap-10 px-5 py-10 lg:grid-cols-[1fr_0.9fr]">
+        <div className="animate-fade-in">
+          <Brand />
+          <h1 className="mt-10 max-w-2xl text-4xl font-extrabold leading-tight text-kisan-green-900 sm:text-5xl">
+            Daily market clarity for <span className="text-kisan-terra-500">Maharashtra</span> farmers.
+          </h1>
+          <p className="mt-5 max-w-xl text-base leading-7 text-kisan-cream-800">
+            Check mandi prices, buyer demand, net returns, and SMS-ready crop updates — all in one place.
+          </p>
+          <form onSubmit={submit} className="mt-8 max-w-sm space-y-4">
+            <Field label="Your name">
+              <input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Aarav Patil" />
+            </Field>
+            <button className="group flex h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 px-5 text-sm font-bold text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
+              <IconPlant2 size={20} />Get started
+            </button>
+          </form>
+        </div>
+
+        {/* Preview card */}
+        <div className="animate-fade-in rounded-2xl border border-kisan-cream-400 bg-white p-5 shadow-elevated">
+          <PriceCard item={{ crop: "Onion", market: "Nashik APMC", price: 4043, unit: "quintal", date: "", source: "", previousPrice: 3980, trend: 1.6 }} />
+          <div className="mt-4 flex items-start gap-3 rounded-xl bg-gradient-to-r from-kisan-terra-50 to-kisan-ochre-50 border border-kisan-terra-200 p-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-kisan-terra-400 text-white">
+              <IconSparkles size={17} />
+            </span>
+            <div className="text-sm text-kisan-terra-800 leading-5">
+              <p className="font-bold">No setup needed</p>
+              <p className="mt-1 text-kisan-terra-600">The prototype remembers this profile on your device. No login required.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+
+/* ════════════════════════════════════════
+     SCREEN 1 — Home Dashboard
+   ════════════════════════════════════════ */
+function Home({ prices, loading, leader, go }: { prices: PriceSnapshot[]; loading: boolean; leader?: PriceSnapshot; go: (view: View) => void }) {
+  return (
+    <div className="space-y-6">
+      {/* Hero: AI assistant callout — the ONE hero moment */}
+      <Panel accent className="border-kisan-terra-300/50 bg-gradient-to-br from-kisan-terra-50 via-white to-kisan-ochre-50 !p-0 overflow-hidden">
+        <div className="flex gap-4 p-5">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-kisan-terra-400 to-kisan-terra-600 text-white shadow-btn-terra">
+            <IconSparkles size={24} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="text-[15px] font-bold text-kisan-green-900">Market Assistant</p>
+              <span className="rounded-full bg-kisan-green-50 border border-kisan-green-200 px-2 py-0.5 text-[10px] font-bold text-kisan-green-600 uppercase tracking-wider">AI</span>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-kisan-cream-800">
+              {leader
+                ? <><strong className="text-kisan-green-700">{leader.crop}</strong> has the strongest movement today at <strong className="text-kisan-terra-600">{Math.abs(leader.trend).toFixed(1)}%</strong>. Ask about selling, storage, nearby buyers, or net returns.</>
+                : "Ask about selling, storage, nearby buyers, or net returns."}
+            </p>
+            <button onClick={() => go("advisor")} className="group mt-3 inline-flex items-center gap-1.5 rounded-lg bg-kisan-green-600 px-4 py-2 text-sm font-bold text-white shadow-btn transition-all hover:bg-kisan-green-500 hover:-translate-y-0.5 active:translate-y-0">
+              Talk to assistant <IconChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+            </button>
+          </div>
+        </div>
+        {/* Subtle bottom decorative bar */}
+        <div className="h-1 bg-gradient-to-r from-kisan-terra-400 via-kisan-ochre-300 to-kisan-green-400" />
+      </Panel>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-3 lg:gap-4">
+        {loading ? (
+          <>
+            <SkeletonStat />
+            <SkeletonStat />
+            <SkeletonStat />
+          </>
+        ) : (
+          <>
+            <Status icon={<IconChartBar size={16} />} label="Market records" value={`${prices.length} crops`} color="green" />
+            <Status icon={<IconBuildingStore size={16} />} label="Buyer requests" value="12 open" color="terra" />
+            <Status icon={<IconCircleCheck size={16} />} label="Verified sellers" value="48 active" color="ochre" />
+          </>
+        )}
+      </div>
+
+      {/* Today's prices */}
+      <div className="flex items-end justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-kisan-green-900">Today&apos;s crop prices</h2>
+          <p className="mt-1 text-xs text-kisan-cream-700">Maharashtra weighted market average</p>
+        </div>
+        <button onClick={() => go("prices")} className="group flex items-center gap-1 text-sm font-bold text-kisan-green-600 transition hover:text-kisan-green-500">
+          All prices <IconChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {prices.slice(0, 6).map((item) => <PriceCard key={item.crop} item={item} />)}
+        </div>
+      )}
+
+      {/* Quick action cards */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ActionButton onClick={() => go("market")} icon={<IconBuildingStore size={22} />} title="Find a buyer" text="Live demand from local traders" />
+        <ActionButton onClick={() => go("calculator")} icon={<IconCalculator size={22} />} title="Net return" text="Calculate travel & packing costs" />
+      </div>
+    </div>
+  );
+}
+
+function Status({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: "green" | "terra" | "ochre" }) {
+  const styles = {
+    green: "border-kisan-green-100 bg-gradient-to-br from-white to-kisan-green-50 [&_.icon]:text-kisan-green-500 [&_.val]:text-kisan-green-800",
+    terra: "border-kisan-terra-100 bg-gradient-to-br from-white to-kisan-terra-50 [&_.icon]:text-kisan-terra-500 [&_.val]:text-kisan-terra-800",
+    ochre: "border-kisan-ochre-100 bg-gradient-to-br from-white to-kisan-ochre-50 [&_.icon]:text-kisan-ochre-500 [&_.val]:text-kisan-ochre-700",
+  };
+  return (
+    <div className={`rounded-xl border p-3.5 shadow-card transition hover:shadow-elevated ${styles[color]}`}>
+      <div className="flex items-center gap-1.5">
+        <span className="icon">{icon}</span>
+        <p className="text-[11px] font-medium leading-4 text-kisan-cream-700 uppercase tracking-wide">{label}</p>
+      </div>
+      <p className="val mt-1.5 text-base font-bold">{value}</p>
+    </div>
+  );
+}
+
+function ActionButton({ onClick, icon, title, text }: { onClick: () => void; icon: React.ReactNode; title: string; text: string }) {
+  return (
+    <button onClick={onClick} className="group card-lift rounded-xl border border-kisan-cream-400 bg-white p-5 text-left shadow-card transition-all hover:border-kisan-terra-300 hover:shadow-elevated">
+      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-kisan-green-50 to-kisan-green-100 text-kisan-green-600 transition group-hover:from-kisan-green-100 group-hover:to-kisan-green-200 group-hover:text-kisan-green-700">
+        {icon}
+      </span>
+      <p className="mt-3 text-[15px] font-bold text-kisan-green-900">{title}</p>
+      <p className="mt-1 text-xs leading-4 text-kisan-cream-700">{text}</p>
+      <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-kisan-terra-500 opacity-0 transition-opacity group-hover:opacity-100">
+        Open <IconChevronRight size={13} />
+      </span>
+    </button>
+  );
+}
+
+
+/* ════════════════════════════════════════
+     SCREEN 2 — Market Linkage
+   ════════════════════════════════════════ */
+function Market() {
+  const [mode, setMode] = useState<"buyers" | "sellers" | "list">("buyers");
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [notice, setNotice] = useState("");
+  const [form, setForm] = useState({ farmer_name: "", crop: "Onion", quantity: "", price: "", location: "", phone: "" });
+
+  useEffect(() => { fetch("/api/listings").then((r) => r.json()).then((data) => setListings(data.listings ?? [])).catch(() => setNotice("Marketplace data is temporarily unavailable.")); }, []);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const response = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    const data = await response.json();
+    if (!response.ok) { setNotice(data.error ?? "Could not publish the listing."); return; }
+    setListings((current) => [data.listing, ...current]);
+    setForm({ farmer_name: "", crop: "Onion", quantity: "", price: "", location: "", phone: "" });
+    setNotice("Listing published for buyers in your region.");
+    setMode("sellers");
+  }
+
+  return (
+    <div className="space-y-5">
+      <Title title="Market linkage" detail="Verified buyer demand and farmer supply in one place." />
+
+      {/* Tabs */}
+      <div className="grid grid-cols-3 rounded-xl border border-kisan-cream-400 bg-kisan-cream-200/50 p-1 gap-1">
+        <Tab active={mode === "buyers"} onClick={() => setMode("buyers")}>Buyer demand</Tab>
+        <Tab active={mode === "sellers"} onClick={() => setMode("sellers")}>Farmer supply</Tab>
+        <Tab active={mode === "list"} onClick={() => setMode("list")}>List crop</Tab>
+      </div>
+
+      {notice && (
+        <div className="flex items-center gap-2 rounded-xl bg-kisan-green-50 border border-kisan-green-200 px-4 py-2.5 text-sm font-medium text-kisan-green-700">
+          <IconCircleCheck size={16} />{notice}
+        </div>
+      )}
+
+      {/* Buyer demand */}
+      {mode === "buyers" && (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {buyerDemand.map((demand) => (
+            <Panel key={demand.buyer}>
+              <div className="flex items-start gap-3">
+                <CropBadge crop={demand.crop} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[15px] font-bold text-kisan-green-900">{demand.buyer}</p>
+                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-kisan-ochre-100 to-kisan-ochre-50 border border-kisan-ochre-200 px-2 py-0.5 text-[10px] font-bold text-kisan-terra-700 uppercase tracking-wide">
+                        <IconCircleCheck size={11} />Verified
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-xl font-extrabold text-kisan-green-800">{money(demand.offer)}</p>
+                      <p className="text-[10px] font-medium text-kisan-cream-700 uppercase">offer / qtl</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 border-t border-kisan-cream-300 pt-3 text-xs text-kisan-cream-800">
+                    <span className="flex items-center gap-1"><IconLeaf size={12} className="text-kisan-green-400" />{demand.crop} · {demand.quantity}</span>
+                    <span className="flex items-center gap-1 justify-end"><IconMapPin size={12} className="text-kisan-terra-400" />{demand.location}</span>
+                  </div>
+                  <button className="group mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-kisan-terra-400 to-kisan-terra-500 text-sm font-bold text-white shadow-btn-terra transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
+                    <IconMessage size={16} />Request buyer contact
+                  </button>
+                </div>
+              </div>
+            </Panel>
+          ))}
+        </div>
+      )}
+
+      {/* Farmer supply */}
+      {mode === "sellers" && (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {listings.map((listing) => (
+            <Panel key={listing.id}>
+              <div className="flex gap-3">
+                <CropBadge crop={listing.crop} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex justify-between gap-2">
+                    <div>
+                      <p className="text-[15px] font-bold text-kisan-green-900">{listing.crop} <span className="font-normal text-kisan-cream-800">from {listing.farmer_name}</span></p>
+                      <span className="mt-1 inline-flex items-center gap-1 text-xs text-kisan-cream-700">
+                        <IconMapPin size={12} className="text-kisan-terra-400" />{listing.quantity} qtl · {listing.location}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-lg font-extrabold text-kisan-green-800">{money(listing.price)}</p>
+                      <p className="text-[10px] text-kisan-cream-700">/ qtl</p>
+                    </div>
+                  </div>
+                  <a href={`https://wa.me/${listing.phone}`} target="_blank" rel="noreferrer" className="mt-3 flex h-10 items-center justify-center gap-2 rounded-xl border-2 border-kisan-green-500 text-sm font-bold text-kisan-green-600 transition-all hover:bg-kisan-green-50 hover:shadow-sm">
+                    <IconMessage size={16} />Contact farmer
+                  </a>
+                </div>
+              </div>
+            </Panel>
+          ))}
+        </div>
+      )}
+
+      {/* List crop form */}
+      {mode === "list" && (
+        <Panel>
+          <form className="space-y-4" onSubmit={submit}>
+            <div className="flex items-start gap-3 pb-4 border-b border-kisan-cream-300">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-kisan-green-50 text-kisan-green-600">
+                <IconPlus size={20} />
+              </span>
+              <div>
+                <p className="font-bold text-kisan-green-900">Publish your crop</p>
+                <p className="mt-0.5 text-sm text-kisan-cream-700">Available for nearby verified buyers</p>
+              </div>
+            </div>
+            <Field label="Farmer name"><input value={form.farmer_name} onChange={(e) => setForm({ ...form, farmer_name: e.target.value })} /></Field>
+            <Field label="Crop"><select value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })}>{CROPS.map((item) => <option key={item}>{item}</option>)}</select></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Quantity (qtl)"><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field>
+              <Field label="Expected ₹ / qtl"><input type="number" min="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field>
+            </div>
+            <Field label="Village / district"><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
+            <Field label="WhatsApp number"><input inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+            <button className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 text-sm font-bold text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
+              <IconPlus size={17} />Publish crop listing
+            </button>
+          </form>
+        </Panel>
+      )}
+    </div>
+  );
+}
+
+
+/* ════════════════════════════════════════
+     SCREEN 3 — AI Market Advisor
+   ════════════════════════════════════════ */
 function Advisor({ prices, language, onBack }: { prices: PriceSnapshot[]; language: Language; onBack: () => void }) {
-  const [crop, setCrop] = useState("Onion"); const [question, setQuestion] = useState(""); const [waiting, setWaiting] = useState(false);
-  const [messages, setMessages] = useState<Chat[]>([{ role: "assistant", content: "Namaskar. I can help you compare prices, decide whether to sell or wait, calculate a likely net return, or find the right market question to ask a buyer." }]);
+  const [crop, setCrop] = useState("Onion");
+  const [question, setQuestion] = useState("");
+  const [waiting, setWaiting] = useState(false);
+  const [messages, setMessages] = useState<Chat[]>([{ role: "assistant", content: "Namaskar 🙏 I can help you compare prices, decide whether to sell or wait, calculate a likely net return, or find the right market question to ask a buyer." }]);
   const selected = prices.find((item) => item.crop === crop) ?? prices[0];
+
   async function send(text = question) {
     const clean = text.trim();
     if (!clean || !selected || waiting) return;
@@ -149,8 +781,54 @@ function Advisor({ prices, language, onBack }: { prices: PriceSnapshot[]; langua
       setWaiting(false);
     }
   }
+
   const quick = ["Should I sell today?", "What price should I ask buyers?", "Is storage worth the cost?"];
-  return <div className="max-w-3xl space-y-4"><Title title="Market assistant" detail="Ask about prices, buyers, selling time, storage, or transport." back={onBack} /><Panel className="p-3"><div className="flex items-center gap-3"><CropBadge crop={crop} size="small" /><select value={crop} onChange={(e) => setCrop(e.target.value)} className="h-10 min-w-0 flex-1 rounded-md border border-[#cbd8ca] bg-white px-3 text-sm">{CROPS.map((item) => <option key={item}>{item}</option>)}</select>{selected && <span className="text-right text-xs font-semibold text-[#19733d]">{money(selected.price)}<br />/qtl</span>}</div></Panel><ChatMessages messages={messages} waiting={waiting} /><div className="flex flex-wrap gap-2">{quick.map((item) => <button key={item} onClick={() => send(item)} className="rounded-md border border-[#cbd8ca] bg-white px-2.5 py-2 text-xs text-[#356642] transition hover:border-[#d49b16]">{item}</button>)}</div><div className="flex gap-2 border-t border-[#dfe6dd] pt-4"><input value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="Ask a market question" className="h-11 min-w-0 flex-1 rounded-md border border-[#cbd8ca] bg-white px-3 text-sm" /><button onClick={() => send()} aria-label="Send question" className="flex h-11 w-11 items-center justify-center rounded-md border border-[#1f6b38] bg-[#1f6b38] text-white"><IconSend size={18} /></button></div><p className="text-[11px] leading-4 text-[#748176]">Advice is informational. Verify live offers and weigh quality, transport, and storage before you sell.</p></div>;
+
+  return (
+    <div className="max-w-3xl space-y-4">
+      <Title title="Market assistant" detail="Ask about prices, buyers, selling time, storage, or transport." back={onBack} />
+
+      {/* Crop selector bar */}
+      <Panel className="!p-3">
+        <div className="flex items-center gap-3">
+          <CropBadge crop={crop} size="small" />
+          <select value={crop} onChange={(e) => setCrop(e.target.value)} className="h-10 min-w-0 flex-1 rounded-xl border border-kisan-cream-400 bg-white px-3 text-sm font-medium">
+            {CROPS.map((item) => <option key={item}>{item}</option>)}
+          </select>
+          {selected && (
+            <div className="text-right">
+              <span className="text-sm font-bold text-kisan-green-700">{money(selected.price)}</span>
+              <span className="block text-[10px] text-kisan-cream-700">/qtl</span>
+            </div>
+          )}
+        </div>
+      </Panel>
+
+      {/* Chat messages */}
+      <ChatMessages messages={messages} waiting={waiting} />
+
+      {/* Quick action chips */}
+      <div className="flex flex-wrap gap-2">
+        {quick.map((item) => (
+          <button key={item} onClick={() => send(item)} className="rounded-full border border-kisan-cream-400 bg-white px-3.5 py-2 text-xs font-medium text-kisan-green-700 transition-all hover:border-kisan-terra-300 hover:bg-kisan-terra-50 hover:text-kisan-terra-700 hover:shadow-sm">
+            {item}
+          </button>
+        ))}
+      </div>
+
+      {/* Input bar */}
+      <div className="flex gap-2 border-t border-kisan-cream-400 pt-4">
+        <input value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="Ask a market question…" className="h-12 min-w-0 flex-1 rounded-xl border border-kisan-cream-400 bg-white px-4 text-sm transition" />
+        <button onClick={() => send()} aria-label="Send question" className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
+          <IconSend size={18} />
+        </button>
+      </div>
+
+      <p className="text-[11px] leading-4 text-kisan-cream-700">
+        Advice is informational. Verify live offers and weigh quality, transport, and storage before you sell.
+      </p>
+    </div>
+  );
 }
 
 function getAdvisorSessionId() {
@@ -161,16 +839,233 @@ function getAdvisorSessionId() {
   window.localStorage.setItem(key, created);
   return created;
 }
-function ChatMessages({ messages, waiting }: { messages: Chat[]; waiting?: boolean }) { return <div className="rounded-lg border border-[#dbe3d5] bg-[#fbfaf6] p-3"><div className="space-y-3">{messages.map((message, index) => <div key={`${message.role}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-2xl border px-3 py-2.5 text-sm leading-5 shadow-sm ${message.role === "user" ? "rounded-br-sm border-[#b9d7ba] bg-[#e8f4e7] text-[#203b26]" : "rounded-bl-sm border-[#d9e0d7] bg-white text-[#354239]"}`}>{message.content}</div></div>)}{waiting && <div className="flex"><div className="rounded-2xl rounded-bl-sm border border-[#d9e0d7] bg-white px-3 py-2.5 text-sm text-[#6d7b70]">Checking your market context...</div></div>}</div></div>; }
 
-function Market() {
-  const [mode, setMode] = useState<"buyers" | "sellers" | "list">("buyers"); const [listings, setListings] = useState<Listing[]>([]); const [notice, setNotice] = useState("");
-  const [form, setForm] = useState({ farmer_name: "", crop: "Onion", quantity: "", price: "", location: "", phone: "" });
-  useEffect(() => { fetch("/api/listings").then((r) => r.json()).then((data) => setListings(data.listings ?? [])).catch(() => setNotice("Marketplace data is temporarily unavailable.")); }, []);
-  async function submit(event: FormEvent) { event.preventDefault(); const response = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const data = await response.json(); if (!response.ok) { setNotice(data.error ?? "Could not publish the listing."); return; } setListings((current) => [data.listing, ...current]); setForm({ farmer_name: "", crop: "Onion", quantity: "", price: "", location: "", phone: "" }); setNotice("Listing published for buyers in your region."); setMode("sellers"); }
-  return <div className="space-y-4"><Title title="Market linkage" detail="Verified buyer demand and farmer supply in one place." /><div className="grid grid-cols-3 rounded-lg border border-[#cbd8ca] bg-white p-1"><Tab active={mode === "buyers"} onClick={() => setMode("buyers")}>Buyer demand</Tab><Tab active={mode === "sellers"} onClick={() => setMode("sellers")}>Farmer supply</Tab><Tab active={mode === "list"} onClick={() => setMode("list")}>List crop</Tab></div>{notice && <p className="text-sm text-[#19733d]">{notice}</p>}{mode === "buyers" && <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">{buyerDemand.map((demand) => <Panel key={demand.buyer}><div className="flex items-start gap-3"><CropBadge crop={demand.crop} /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold">{demand.buyer}</p><p className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#fff2cc] px-2 py-1 text-xs font-semibold text-[#8a6200]"><IconCircleCheck size={13} />Verified buyer</p></div><p className="text-right font-mono text-lg font-bold">{money(demand.offer)}<span className="block font-sans text-[11px] font-normal text-[#6d7b70]">offer / qtl</span></p></div><div className="mt-3 grid grid-cols-2 gap-2 border-t border-[#edf0ec] pt-3 text-xs text-[#657366]"><span>{demand.crop} / {demand.quantity}</span><span className="text-right">{demand.location}</span></div><button className="mt-3 h-9 w-full rounded-md bg-[#d49b16] text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#b88310] active:translate-y-0">Request buyer contact</button></div></div></Panel>)}</div>}{mode === "sellers" && <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">{listings.map((listing) => <Panel key={listing.id}><div className="flex gap-3"><CropBadge crop={listing.crop} /><div className="min-w-0 flex-1"><div className="flex justify-between gap-2"><div><p className="text-sm font-semibold">{listing.crop} from {listing.farmer_name}</p><p className="mt-1 text-xs text-[#6d7b70]">{listing.quantity} qtl / {listing.location}</p></div><p className="text-right text-sm font-semibold">{money(listing.price)}<span className="block text-[11px] font-normal text-[#6d7b70]">/ qtl</span></p></div><a href={`https://wa.me/${listing.phone}`} target="_blank" rel="noreferrer" className="mt-3 flex h-9 items-center justify-center gap-2 rounded-md border border-[#1f6b38] text-sm font-semibold text-[#1f6b38]"><IconMessage size={16} />Contact farmer</a></div></div></Panel>)}</div>}{mode === "list" && <Panel><form className="space-y-4" onSubmit={submit}><p className="text-sm leading-5 text-[#59665b]">Publish your available crop for nearby verified buyers.</p><Field label="Farmer name"><input value={form.farmer_name} onChange={(e) => setForm({ ...form, farmer_name: e.target.value })} /></Field><Field label="Crop"><select value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })}>{CROPS.map((item) => <option key={item}>{item}</option>)}</select></Field><div className="grid grid-cols-2 gap-3"><Field label="Quantity (qtl)"><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field><Field label="Expected Rs / qtl"><input type="number" min="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field></div><Field label="Village / district"><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field><Field label="WhatsApp number"><input inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field><button className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-[#1f6b38] bg-[#1f6b38] text-sm font-semibold text-white"><IconPlus size={17} />Publish crop listing</button></form></Panel>}</div>;
+function ChatMessages({ messages, waiting }: { messages: Chat[]; waiting?: boolean }) {
+  return (
+    <div className="rounded-xl border border-kisan-cream-400 bg-kisan-cream-50 p-4 chat-scroll max-h-[50vh] overflow-y-auto">
+      <div className="space-y-3">
+        {messages.map((message, index) => (
+          <div key={`${message.role}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}>
+            {message.role === "assistant" && (
+              <span className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-kisan-green-400 to-kisan-green-600 text-white shadow-sm">
+                <IconSparkles size={13} />
+              </span>
+            )}
+            <div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+              message.role === "user"
+                ? "rounded-br-md bg-gradient-to-br from-kisan-green-500 to-kisan-green-600 text-white"
+                : "rounded-bl-md bg-white border border-kisan-cream-300 text-[#354239]"
+            }`}>
+              {message.content}
+            </div>
+          </div>
+        ))}
+        {waiting && (
+          <div className="flex animate-fade-in">
+            <span className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-kisan-green-400 to-kisan-green-600 text-white shadow-sm">
+              <IconSparkles size={13} />
+            </span>
+            <div className="rounded-2xl rounded-bl-md bg-white border border-kisan-cream-300 px-4 py-3 shadow-sm">
+              <span className="flex items-center gap-1.5">
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
-function Tab({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) { return <button onClick={onClick} className={`min-w-0 rounded-md px-1 py-2 text-[11px] transition ${active ? "bg-[#1f6b38] font-semibold text-white" : "text-[#59665b] hover:bg-[#eef3ea]"}`}>{children}</button>; }
-function Sms({ prices }: { prices: PriceSnapshot[] }) { const [query, setQuery] = useState("ONION"); const [sent, setSent] = useState(false); const found = prices.find((item) => item.crop.toUpperCase() === query.trim().toUpperCase()); const messages: Chat[] = [{ role: "user", content: "ONION" }, { role: "assistant", content: `ONION: ${prices[0] ? `${money(prices.find((item) => item.crop === "Onion")?.price ?? 0)}/quintal. Reply with another crop name.` : "Loading latest record..."}` }, ...(sent ? [{ role: "user" as const, content: query }, { role: "assistant" as const, content: found ? `${found.crop}: ${money(found.price)}/quintal, ${found.trend > 0 ? "up" : found.trend < 0 ? "down" : "flat"} ${Math.abs(found.trend).toFixed(1)}%.` : "No record found. Try ONION, TOMATO, WHEAT, COTTON, SOYBEAN or POTATO." }] : [])]; return <div className="max-w-3xl space-y-4"><Title title="SMS market service" detail="Farmers can text a crop name to receive one latest price." /><Panel><ChatMessages messages={messages} /><div className="mt-4 flex gap-2 border-t border-[#edf0ec] pt-4"><input value={query} onChange={(e) => setQuery(e.target.value.toUpperCase())} className="h-11 min-w-0 flex-1 rounded-md border border-[#cbd8ca] px-3 text-sm" /><button onClick={() => setSent(true)} className="flex h-11 w-11 items-center justify-center rounded-md border border-[#1f6b38] bg-[#1f6b38] text-white"><IconSend size={18} /></button></div></Panel><Panel><p className="text-sm font-semibold">SMS integration is active</p><p className="mt-1 text-sm leading-5 text-[#59665b]">Your Twilio webhook returns a current Supabase price for crop keywords sent to the service number.</p></Panel></div>; }
 
+
+/* ════════════════════════════════════════
+     SCREEN 4 — SMS Market Service
+   ════════════════════════════════════════ */
+function Sms({ prices }: { prices: PriceSnapshot[] }) {
+  const [query, setQuery] = useState("ONION");
+  const [sent, setSent] = useState(false);
+  const found = prices.find((item) => item.crop.toUpperCase() === query.trim().toUpperCase());
+
+  const messages: Chat[] = [
+    { role: "user", content: "ONION" },
+    { role: "assistant", content: `ONION: ${prices[0] ? `${money(prices.find((item) => item.crop === "Onion")?.price ?? 0)}/quintal. Reply with another crop name.` : "Loading latest record..."}` },
+    ...(sent ? [
+      { role: "user" as const, content: query },
+      { role: "assistant" as const, content: found ? `${found.crop}: ${money(found.price)}/quintal, ${found.trend > 0 ? "up" : found.trend < 0 ? "down" : "flat"} ${Math.abs(found.trend).toFixed(1)}%.` : "No record found. Try ONION, TOMATO, WHEAT, COTTON, SOYBEAN or POTATO." },
+    ] : []),
+  ];
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <Title title="SMS market service" detail="Farmers can text a crop name to receive one latest price." />
+
+      {/* SMS simulator */}
+      <Panel>
+        <ChatMessages messages={messages} />
+        <div className="mt-4 flex gap-2 border-t border-kisan-cream-300 pt-4">
+          <input value={query} onChange={(e) => setQuery(e.target.value.toUpperCase())} placeholder="Type a crop name…" className="h-11 min-w-0 flex-1 rounded-xl border border-kisan-cream-400 bg-white px-3.5 text-sm transition" />
+          <button onClick={() => setSent(true)} className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
+            <IconSend size={18} />
+          </button>
+        </div>
+      </Panel>
+
+      {/* Integration status */}
+      <Panel>
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-kisan-green-50 text-kisan-green-600">
+            <IconCircleCheck size={20} />
+          </span>
+          <div>
+            <p className="font-bold text-kisan-green-900">SMS integration is active</p>
+            <p className="mt-1 text-sm leading-relaxed text-kisan-cream-700">Your Twilio webhook returns a current Supabase price for crop keywords sent to the service number.</p>
+          </div>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+
+/* ════════════════════════════════════════
+     SCREEN 5 — Price Board
+   ════════════════════════════════════════ */
+function Prices({ prices, loading }: { prices: PriceSnapshot[]; loading: boolean }) {
+  return (
+    <>
+      <Title title="Mandi price board" detail="Daily prices averaged across reporting markets" />
+      {loading ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {prices.map((item) => <PriceCard key={item.crop} item={item} />)}
+        </div>
+      )}
+    </>
+  );
+}
+
+
+/* ════════════════════════════════════════
+     SCREEN 6 — Net Return Calculator
+   ════════════════════════════════════════ */
+function Calculator({ prices, onBack }: { prices: PriceSnapshot[]; onBack: () => void }) {
+  const [crop, setCrop] = useState("Onion");
+  const [quantity, setQuantity] = useState(10);
+  const [distance, setDistance] = useState(25);
+  const chosen = prices.find((item) => item.crop === crop);
+  const gross = (chosen?.price ?? 0) * quantity;
+  const transport = distance * 8;
+  const packing = gross * 0.05;
+  const net = gross - transport - packing;
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <Title title="Net return calculator" detail="Estimate your sale value before you transport." back={onBack} />
+
+      {/* Inputs */}
+      <Panel>
+        <div className="space-y-4">
+          <Field label="Crop">
+            <select value={crop} onChange={(e) => setCrop(e.target.value)}>
+              {CROPS.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Quantity (qtl)">
+              <input type="number" min="0" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+            </Field>
+            <Field label="Distance (km)">
+              <input type="number" min="0" value={distance} onChange={(e) => setDistance(Number(e.target.value))} />
+            </Field>
+          </div>
+        </div>
+      </Panel>
+
+      {/* Result breakdown */}
+      <Panel accent className="border-kisan-green-200 bg-gradient-to-br from-white to-kisan-green-50">
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-kisan-green-100">
+          <IconCalculator size={18} className="text-kisan-green-500" />
+          <p className="text-xs font-bold text-kisan-cream-800 uppercase tracking-wide">
+            Estimated return using {chosen ? money(chosen.price) : "current price"}/qtl
+          </p>
+        </div>
+        <div className="space-y-3">
+          <Row label="Gross sale value" value={money(gross)} />
+          <Row label="Transport (₹8/km)" value={`−${money(transport)}`} />
+          <Row label="Packing (5%)" value={`−${money(packing)}`} />
+          <div className="flex justify-between border-t border-kisan-green-200 pt-3">
+            <span className="text-base font-bold text-kisan-green-900">Expected net return</span>
+            <span className="font-mono text-xl font-extrabold text-kisan-green-600">{money(net)}</span>
+          </div>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+
+/* ════════════════════════════════════════
+     SCREEN 7 — Profile
+   ════════════════════════════════════════ */
+function ProfileScreen({ profile, onSave, onLogout }: { profile: Profile; onSave: (profile: Profile) => void; onLogout: () => void }) {
+  const [form, setForm] = useState(profile);
+  const [saved, setSaved] = useState(false);
+
+  function save(event: FormEvent) {
+    event.preventDefault();
+    window.localStorage.setItem("kisansetu-profile", JSON.stringify(form));
+    onSave(form);
+    setSaved(true);
+  }
+
+  return (
+    <div className="max-w-2xl">
+      <Title title="Profile" detail="Manage your prototype farm profile." />
+      <Panel>
+        <form onSubmit={save} className="space-y-5">
+          {/* Avatar / name header */}
+          <div className="flex items-center gap-4 pb-4 border-b border-kisan-cream-300">
+            <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-kisan-green-50 to-kisan-green-100 text-kisan-green-600 shadow-card">
+              <IconUserCircle size={40} />
+            </span>
+            <div>
+              <p className="text-lg font-bold text-kisan-green-900">{profile.name}</p>
+              <p className="text-xs text-kisan-cream-700">Prototype local profile</p>
+            </div>
+          </div>
+
+          <Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Village"><input value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })} /></Field>
+            <Field label="Taluka"><input value={form.taluka} onChange={(e) => setForm({ ...form, taluka: e.target.value })} /></Field>
+            <Field label="District"><input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></Field>
+          </div>
+          <Field label="Language"><LanguageSelect value={form.preferred_language} onChange={(preferred_language) => setForm({ ...form, preferred_language })} /></Field>
+
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <button className="flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 px-5 text-sm font-bold text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
+              Save profile
+            </button>
+            <button type="button" onClick={onLogout} className="flex h-11 items-center gap-2 rounded-xl border-2 border-kisan-cream-400 px-4 text-sm font-bold text-kisan-cream-800 transition hover:border-red-300 hover:text-red-600">
+              <IconLogout size={17} />Logout
+            </button>
+            {saved && (
+              <span className="flex items-center gap-1 text-sm font-bold text-kisan-green-600 animate-fade-in">
+                <IconCircleCheck size={16} />Saved
+              </span>
+            )}
+          </div>
+        </form>
+      </Panel>
+    </div>
+  );
+}
+
+
+/* ─── Data transform (untouched logic) ─── */
 function toCropPrices(rows: Array<Record<string, unknown>>): PriceSnapshot[] { const groups = new Map<string, Array<Record<string, unknown>>>(); for (const row of rows) { const crop = String(row.crop); groups.set(crop, [...(groups.get(crop) ?? []), row]); } return [...groups.entries()].map(([crop, records]) => { const dayMap = new Map<string, Array<Record<string, unknown>>>(); for (const row of records) { const date = String(row.date); dayMap.set(date, [...(dayMap.get(date) ?? []), row]); } const [latest, previous] = [...dayMap.keys()].sort((a, b) => b.localeCompare(a)); const mean = (items: Array<Record<string, unknown>>) => items.reduce((total, item) => total + Number(item.price), 0) / items.length; const currentRows = dayMap.get(latest) ?? []; const priorRows = previous ? dayMap.get(previous) ?? [] : []; const price = mean(currentRows); const previousPrice = priorRows.length ? mean(priorRows) : null; return { crop, market: "Maharashtra market average", price, unit: String(currentRows[0]?.unit ?? "quintal"), date: latest, source: String(currentRows[0]?.source ?? "data.gov.in"), previousPrice, trend: previousPrice ? Number((((price - previousPrice) / previousPrice) * 100).toFixed(1)) : 0 }; }); }
