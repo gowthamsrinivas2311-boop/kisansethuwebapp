@@ -1,15 +1,48 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { IconArrowLeft, IconBuildingStore, IconCalculator, IconChartBar, IconChevronRight, IconCircleCheck, IconHome, IconLogout, IconMapPin, IconMessage, IconMinus, IconPlant2, IconPlus, IconSend, IconSparkles, IconTrendingDown, IconTrendingUp, IconUserCircle, IconLeaf } from "@tabler/icons-react";
+import { User, Session } from "@supabase/supabase-js";
+import {
+  IconArrowLeft,
+  IconBuildingStore,
+  IconCalculator,
+  IconChartBar,
+  IconChevronRight,
+  IconCircleCheck,
+  IconHome,
+  IconLogout,
+  IconMapPin,
+  IconMessage,
+  IconMinus,
+  IconPlant2,
+  IconPlus,
+  IconSend,
+  IconSparkles,
+  IconTrendingDown,
+  IconTrendingUp,
+  IconUserCircle,
+  IconLeaf,
+  IconShieldCheck,
+} from "@tabler/icons-react";
 import { CROPS } from "@/lib/demo-data";
 import type { Language, Listing, PriceSnapshot } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
 
 type View = "home" | "prices" | "market" | "sms" | "calculator" | "advisor" | "profile";
 type Chat = { role: "user" | "assistant"; content: string };
-type Profile = { name: string; village: string; taluka: string; district: string; preferred_language: Language };
+type Profile = {
+  id?: string;
+  name: string;
+  village: string;
+  taluka: string;
+  district: string;
+  preferred_language: Language;
+  avatar_url?: string | null;
+  email?: string | null;
+};
 
 const money = (amount: number) => `₹${Math.round(amount || 0).toLocaleString("en-IN")}`;
+
 const cropLooks: Record<string, { mark: string; bg: string; fg: string; line: string; gradFrom: string; gradTo: string }> = {
   Onion:   { mark: "ON", bg: "#f7ede2", fg: "#8a4b19", line: "#c9792d", gradFrom: "#f7ede2", gradTo: "#f0ddc8" },
   Tomato:  { mark: "TO", bg: "#fde8e7", fg: "#b42318", line: "#e5483f", gradFrom: "#fde8e7", gradTo: "#f8d0cd" },
@@ -133,6 +166,7 @@ function Trend({ value }: { value: number }) {
   );
 }
 
+/* ─── High Contrast Sparkline ─── */
 function Sparkline({ item }: { item: PriceSnapshot }) {
   const look = cropLooks[item.crop] ?? cropLooks.Onion;
   const seed = item.crop.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
@@ -140,24 +174,30 @@ function Sparkline({ item }: { item: PriceSnapshot }) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const spread = max - min || 1;
-  const points = values.map((value, index) => `${(index / 6) * 100},${32 - ((value - min) / spread) * 24}`).join(" ");
-  const areaPoints = `0,34 ${points} 100,34`;
+  const points = values.map((value, index) => `${(index / 6) * 100},${30 - ((value - min) / spread) * 22}`).join(" ");
+  const areaPoints = `0,33 ${points} 100,33`;
   const up = item.trend >= 0;
+  const filterId = `glow-${item.crop}`;
+
   return (
     <svg aria-label={`${item.crop} 7 day trend`} viewBox="0 0 100 38" className="h-12 w-full overflow-visible">
       <defs>
         <linearGradient id={`grad-${item.crop}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={look.line} stopOpacity="0.15" />
-          <stop offset="100%" stopColor={look.line} stopOpacity="0" />
+          <stop offset="0%" stopColor={look.line} stopOpacity="0.30" />
+          <stop offset="100%" stopColor={look.line} stopOpacity="0.0" />
         </linearGradient>
       </defs>
+      {/* Baseline */}
+      <line x1="0" y1="33" x2="100" y2="33" stroke="#e0e7de" strokeWidth="0.8" strokeDasharray="2 2" />
+      {/* Gradient Area Fill */}
       <polygon fill={`url(#grad-${item.crop})`} points={areaPoints} />
-      <polyline fill="none" stroke={look.line} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
-      {/* End dot */}
-      <circle cx="100" cy={32 - ((values[6] - min) / spread) * 24} r="3" fill={up ? "#1b6e34" : "#dc2626"} />
+      {/* High-contrast Trend Line */}
+      <polyline fill="none" stroke={look.line} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" points={points} />
+      {/* Highlighted End Dot */}
+      <circle cx="100" cy={30 - ((values[6] - min) / spread) * 22} r="3.5" fill={up ? "#1b6e34" : "#dc2626"} stroke="#ffffff" strokeWidth="1" />
       {/* Day labels */}
       {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-        <text key={i} x={(i / 6) * 100} y="38" fontSize="5" fill="#9e9680" textAnchor="middle">{d}</text>
+        <text key={i} x={(i / 6) * 100} y="38" fontSize="4.8" fontWeight="600" fill="#888170" textAnchor="middle">{d}</text>
       ))}
     </svg>
   );
@@ -221,34 +261,133 @@ function PriceCard({ item }: { item: PriceSnapshot }) {
 /* ─── Main App Shell ─── */
 export function KisanSetuApp() {
   const [view, setView] = useState<View>("home");
+  const [sessionReady, setSessionReady] = useState(false);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [profileReady, setProfileReady] = useState(false);
   const [prices, setPrices] = useState<PriceSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Initialize session & handle auth state changes
   useEffect(() => {
-    const saved = window.localStorage.getItem("kisansetu-profile");
-    if (saved) setProfile(JSON.parse(saved) as Profile);
-    setProfileReady(true);
+    async function loadAuth() {
+      if (!supabase) {
+        // Fallback for dev environment without env vars
+        const saved = window.localStorage.getItem("kisansetu-profile");
+        if (saved) setProfile(JSON.parse(saved) as Profile);
+        setSessionReady(true);
+        return;
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        await processSession(session);
+      } catch (err) {
+        console.error("Auth session check error:", err);
+      } finally {
+        setSessionReady(true);
+      }
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        await processSession(session);
+        setSessionReady(true);
+      });
+
+      return () => subscription.unsubscribe();
+    }
+
+    loadAuth();
   }, []);
 
-  useEffect(() => { fetch("/api/prices").then((r) => r.json()).then((rows) => setPrices(toCropPrices(Array.isArray(rows) ? rows : []))).catch(() => undefined).finally(() => setLoading(false)); }, []);
+  async function processSession(session: Session | null) {
+    if (!session?.user) {
+      setAuthUser(null);
+      setProfile(null);
+      setNeedsOnboarding(false);
+      return;
+    }
+
+    setAuthUser(session.user);
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      if (data) {
+        setProfile({
+          id: data.id,
+          name: data.name,
+          village: data.village || "",
+          taluka: data.taluka || "",
+          district: data.district || "",
+          preferred_language: (data.preferred_language as Language) || "english",
+          avatar_url: data.avatar_url || session.user.user_metadata?.avatar_url || null,
+          email: data.email || session.user.email || null,
+        });
+        setNeedsOnboarding(false);
+      } else {
+        // User logged in via Google OAuth, but profile row does not exist yet -> trigger Onboarding
+        setNeedsOnboarding(true);
+        setProfile(null);
+      }
+    }
+  }
+
+  useEffect(() => {
+    fetch("/api/prices")
+      .then((r) => r.json())
+      .then((rows) => setPrices(toCropPrices(Array.isArray(rows) ? rows : [])))
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
 
   const leader = useMemo(() => [...prices].sort((a, b) => b.trend - a.trend)[0], [prices]);
   const language = profile?.preferred_language ?? "english";
 
-  if (!profileReady) return (
-    <main className="flex min-h-screen items-center justify-center bg-kisan-cream-100 text-sm text-kisan-cream-700">
-      <div className="flex flex-col items-center gap-3 animate-fade-in">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-kisan-green-500 to-kisan-green-700 text-white shadow-btn">
-          <IconPlant2 size={28} />
-        </span>
-        <span className="font-semibold text-kisan-green-700">Opening KisanSetu…</span>
-      </div>
-    </main>
-  );
-  if (!profile) return <Landing onLogin={setProfile} />;
+  // 1. Session check loading screen (prevents flash of landing page for returning users)
+  if (!sessionReady) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-kisan-cream-100 text-sm text-kisan-cream-700">
+        <div className="flex flex-col items-center gap-3 animate-fade-in">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-kisan-green-500 to-kisan-green-700 text-white shadow-btn">
+            <IconPlant2 size={28} />
+          </span>
+          <span className="font-bold text-kisan-green-800">Checking KisanSetu session…</span>
+        </div>
+      </main>
+    );
+  }
 
+  // 2. Logged in via Google OAuth but needs onboarding info (village, taluka, language)
+  if (needsOnboarding && authUser) {
+    return (
+      <OnboardingScreen
+        user={authUser}
+        onComplete={(newProfile) => {
+          setProfile(newProfile);
+          setNeedsOnboarding(false);
+        }}
+      />
+    );
+  }
+
+  // 3. Not logged in -> Landing page with Google OAuth
+  if (!profile) {
+    return (
+      <Landing
+        onDevLogin={(name) => {
+          const devProfile = { name, village: "", taluka: "", district: "", preferred_language: "english" as Language };
+          window.localStorage.setItem("kisansetu-profile", JSON.stringify(devProfile));
+          setProfile(devProfile);
+        }}
+      />
+    );
+  }
+
+  // 4. Authenticated & Onboarded -> Main Dashboard
   return (
     <main className="min-h-screen bg-kisan-cream-100 text-[#18251b]">
       {/* Top accent bar — gradient */}
@@ -294,7 +433,22 @@ export function KisanSetuApp() {
             {view === "sms" && <Sms prices={prices} />}
             {view === "calculator" && <Calculator prices={prices} onBack={() => setView("home")} />}
             {view === "advisor" && <Advisor prices={prices} language={language} onBack={() => setView("home")} />}
-            {view === "profile" && <ProfileScreen profile={profile} onSave={setProfile} onLogout={() => { window.localStorage.removeItem("kisansetu-profile"); setProfile(null); setView("home"); }} />}
+            {view === "profile" && (
+              <ProfileScreen
+                profile={profile}
+                onSave={setProfile}
+                onLogout={async () => {
+                  if (supabase) {
+                    await supabase.auth.signOut();
+                  }
+                  window.localStorage.removeItem("kisansetu-profile");
+                  setProfile(null);
+                  setAuthUser(null);
+                  setNeedsOnboarding(false);
+                  setView("home");
+                }}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -345,9 +499,13 @@ function Header({ profile, setView }: { profile: Profile; setView: (view: View) 
           </p>
         </div>
         <button onClick={() => setView("profile")} className="group flex items-center gap-2.5 rounded-full border border-kisan-cream-400 bg-white p-1 pr-3.5 text-sm font-medium transition hover:border-kisan-terra-400 hover:shadow-elevated">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-kisan-green-50 to-kisan-green-100 text-kisan-green-600 transition group-hover:from-kisan-green-100 group-hover:to-kisan-green-200">
-            <IconUserCircle size={22} />
-          </span>
+          {profile.avatar_url ? (
+            <img src={profile.avatar_url} alt={profile.name} className="h-9 w-9 rounded-full object-cover border border-kisan-green-300" />
+          ) : (
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-kisan-green-50 to-kisan-green-100 text-kisan-green-600 transition group-hover:from-kisan-green-100 group-hover:to-kisan-green-200">
+              <IconUserCircle size={22} />
+            </span>
+          )}
           <span className="hidden sm:inline text-kisan-green-800">Account</span>
         </button>
       </div>
@@ -453,58 +611,247 @@ function LanguageSelect({ value, onChange }: { value: Language; onChange: (value
 
 
 /* ════════════════════════════════════════
-     SCREEN 0 — Landing
+     SCREEN 0 — Landing Page with Google OAuth
    ════════════════════════════════════════ */
-function Landing({ onLogin }: { onLogin: (profile: Profile) => void }) {
-  const [name, setName] = useState("");
+function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
+  const [signingIn, setSigningIn] = useState(false);
+  const [devName, setDevName] = useState("");
+  const [showDevLogin, setShowDevLogin] = useState(!supabase);
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    const profile = { name: name.trim(), village: "", taluka: "", district: "", preferred_language: "english" as Language };
-    window.localStorage.setItem("kisansetu-profile", JSON.stringify(profile));
-    onLogin(profile);
+  async function handleGoogleSignIn() {
+    if (!supabase) {
+      setShowDevLogin(true);
+      return;
+    }
+
+    setSigningIn(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+        },
+      });
+      if (error) throw error;
+    } catch (err) {
+      console.error("Google sign in error:", err);
+      setSigningIn(false);
+    }
+  }
+
+  function handleDevSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (devName.trim()) {
+      onDevLogin(devName.trim());
+    }
   }
 
   return (
     <main className="min-h-screen bg-kisan-cream-100 text-[#18251b]">
       <div className="h-1 bg-gradient-to-r from-kisan-green-700 via-kisan-green-500 to-kisan-terra-500" />
-      <section className="mx-auto grid min-h-[calc(100vh-4px)] max-w-6xl items-center gap-10 px-5 py-10 lg:grid-cols-[1fr_0.9fr]">
+      <section className="mx-auto grid min-h-[calc(100vh-4px)] max-w-6xl items-center gap-12 px-5 py-10 lg:grid-cols-[1fr_1fr]">
+        
+        {/* Left Column — Title & Google OAuth CTA */}
         <div className="animate-fade-in">
           <Brand />
           <h1 className="mt-10 max-w-2xl text-4xl font-extrabold leading-tight text-kisan-green-900 sm:text-5xl">
             Daily market clarity for <span className="text-kisan-terra-500">Maharashtra</span> farmers.
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-kisan-cream-800">
-            Check mandi prices, buyer demand, net returns, and SMS-ready crop updates — all in one place.
+            Check live mandi prices, connect with verified buyers, calculate net returns, and get instant AI advice in Marathi &amp; Hindi.
           </p>
-          <form onSubmit={submit} className="mt-8 max-w-sm space-y-4">
-            <Field label="Your name">
-              <input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Aarav Patil" />
-            </Field>
-            <button className="group flex h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 px-5 text-sm font-bold text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
-              <IconPlant2 size={20} />Get started
-            </button>
-          </form>
-        </div>
 
-        {/* Preview card */}
-        <div className="animate-fade-in rounded-2xl border border-kisan-cream-400 bg-white p-5 shadow-elevated">
-          <PriceCard item={{ crop: "Onion", market: "Nashik APMC", price: 4043, unit: "quintal", date: "", source: "", previousPrice: 3980, trend: 1.6 }} />
-          <div className="mt-4 flex items-start gap-3 rounded-xl bg-gradient-to-r from-kisan-terra-50 to-kisan-ochre-50 border border-kisan-terra-200 p-4">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-kisan-terra-400 text-white">
-              <IconSparkles size={17} />
-            </span>
-            <div className="text-sm text-kisan-terra-800 leading-5">
-              <p className="font-bold">No setup needed</p>
-              <p className="mt-1 text-kisan-terra-600">The prototype remembers this profile on your device. No login required.</p>
-            </div>
+          <div className="mt-8 max-w-sm space-y-4">
+            {/* Real Google OAuth Button */}
+            <button
+              onClick={handleGoogleSignIn}
+              disabled={signingIn}
+              className="group flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-white border-2 border-kisan-cream-400 px-5 text-base font-bold text-kisan-green-900 shadow-card transition-all hover:border-kisan-green-500 hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60"
+            >
+              {signingIn ? (
+                <span className="flex items-center gap-2 text-sm font-semibold text-kisan-green-700">
+                  <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" /> Connecting to Google…
+                </span>
+              ) : (
+                <>
+                  <svg className="h-6 w-6 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                  <span>Continue with Google</span>
+                </>
+              )}
+            </button>
+
+            <p className="text-center text-xs text-kisan-cream-700">
+              Sign in with Google — no passwords, fast &amp; secure access.
+            </p>
+
+            {/* Fallback Dev Login if Supabase env vars not detected */}
+            {showDevLogin && (
+              <div className="mt-4 pt-4 border-t border-kisan-cream-300">
+                <p className="text-xs font-semibold text-kisan-terra-600 mb-2">Dev Mode: Direct Login</p>
+                <form onSubmit={handleDevSubmit} className="space-y-2">
+                  <input
+                    value={devName}
+                    onChange={(e) => setDevName(e.target.value)}
+                    placeholder="Enter name (e.g. Aarav Patil)"
+                    className="h-10 w-full rounded-xl border border-kisan-cream-400 px-3 text-sm"
+                  />
+                  <button className="h-9 w-full rounded-xl bg-kisan-green-600 text-xs font-bold text-white">
+                    Enter Prototype Dashboard
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Right Column — Redesigned Hero Preview Panel with Stacked Cards */}
+        <div className="relative animate-fade-in">
+          <div className="relative rounded-3xl border border-kisan-cream-400/80 bg-gradient-to-br from-kisan-cream-200 via-white to-kisan-cream-100 p-6 shadow-elevated overflow-hidden">
+            
+            {/* Background glowing gradient highlights */}
+            <div className="absolute -top-12 -right-12 h-44 w-44 rounded-full bg-gradient-to-br from-kisan-green-100/60 to-kisan-terra-100/40 blur-2xl pointer-events-none" />
+            <div className="absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-gradient-to-tr from-kisan-ochre-100/60 to-kisan-green-100/30 blur-2xl pointer-events-none" />
+
+            {/* Preview header */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-kisan-cream-300/80 mb-5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-bold text-kisan-green-900 uppercase tracking-wider">Live Mandi Board</span>
+              </div>
+              <span className="text-[11px] font-medium text-kisan-cream-700">Maharashtra APMCs</span>
+            </div>
+
+            {/* Layered Stacked Price Cards Deck */}
+            <div className="relative space-y-3">
+              {/* Primary Anchor Card (Onion) */}
+              <div className="relative z-10 rounded-2xl border border-kisan-cream-300 bg-white p-5 shadow-elevated card-lift transition-transform">
+                <PriceCard item={{ crop: "Onion", market: "Nashik APMC", price: 4043, unit: "quintal", date: "2026-09-24", source: "APMC Bulletin", previousPrice: 3980, trend: 11.2 }} />
+              </div>
+
+              {/* Offset Second Layered Card (Tomato) */}
+              <div className="relative z-0 -mt-6 rounded-2xl border border-kisan-cream-300/90 bg-white/95 p-5 shadow-card transform translate-y-2 opacity-95 card-lift transition-transform">
+                <PriceCard item={{ crop: "Tomato", market: "Pune APMC", price: 3180, unit: "quintal", date: "2026-09-24", source: "APMC Bulletin", previousPrice: 2840, trend: 11.8 }} />
+              </div>
+            </div>
+
+            {/* Trust Badges & Value Proposition Callouts */}
+            <div className="mt-6 border-t border-kisan-cream-300/80 pt-4 space-y-2.5">
+              <p className="text-xs font-bold text-kisan-green-900 flex items-center gap-1.5">
+                <IconShieldCheck size={17} className="text-kisan-terra-500" />
+                Trusted by farmers across Nashik, Pune, Nagpur, &amp; Solapur
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-kisan-cream-800">
+                <div className="flex items-center gap-1.5 rounded-xl bg-kisan-cream-50/90 p-2 border border-kisan-cream-300/60">
+                  <IconCircleCheck size={14} className="text-kisan-green-600 shrink-0" />
+                  <span>Instant Google OAuth</span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-xl bg-kisan-cream-50/90 p-2 border border-kisan-cream-300/60">
+                  <IconSparkles size={14} className="text-kisan-terra-500 shrink-0" />
+                  <span>AI Marathi/Hindi advisor</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
       </section>
     </main>
   );
 }
 
+/* ════════════════════════════════════════
+     SCREEN 0.5 — Onboarding Screen (New Google Users)
+   ════════════════════════════════════════ */
+function OnboardingScreen({ user, onComplete }: { user: User; onComplete: (profile: Profile) => void }) {
+  const defaultName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "";
+  const [form, setForm] = useState({
+    name: defaultName,
+    village: "",
+    taluka: "",
+    district: "",
+    preferred_language: "english" as Language,
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const newProfile: Profile = {
+      id: user.id,
+      name: form.name.trim() || "Farmer",
+      village: form.village.trim(),
+      taluka: form.taluka.trim(),
+      district: form.district.trim(),
+      preferred_language: form.preferred_language,
+      avatar_url: user.user_metadata?.avatar_url || null,
+      email: user.email || null,
+    };
+
+    if (supabase) {
+      const { error } = await supabase.from("profiles").upsert([
+        {
+          id: user.id,
+          name: newProfile.name,
+          village: newProfile.village,
+          taluka: newProfile.taluka,
+          district: newProfile.district,
+          preferred_language: newProfile.preferred_language,
+          avatar_url: newProfile.avatar_url,
+          email: newProfile.email,
+          onboarded_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ]);
+      if (error) {
+        console.error("Error saving profile to Supabase:", error.message);
+      }
+    } else {
+      window.localStorage.setItem("kisansetu-profile", JSON.stringify(newProfile));
+    }
+
+    onComplete(newProfile);
+    setSaving(false);
+  }
+
+  return (
+    <main className="min-h-screen bg-kisan-cream-100 text-[#18251b] flex items-center justify-center p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-kisan-cream-400 bg-white p-6 shadow-elevated animate-fade-in">
+        <div className="flex items-center gap-3 pb-4 border-b border-kisan-cream-300">
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-kisan-green-500 to-kisan-green-700 text-white shadow-btn">
+            <IconPlant2 size={24} />
+          </span>
+          <div>
+            <h2 className="text-xl font-bold text-kisan-green-900">Welcome to KisanSetu 🙏</h2>
+            <p className="text-xs text-kisan-cream-700">Set up your farm profile to get personalized mandi rates.</p>
+          </div>
+        </div>
+
+        <form onSubmit={submit} className="mt-5 space-y-4">
+          <Field label="Your Name">
+            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Aarav Patil" />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Village"><input value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })} placeholder="e.g. Niphad" /></Field>
+            <Field label="Taluka"><input value={form.taluka} onChange={(e) => setForm({ ...form, taluka: e.target.value })} placeholder="e.g. Niphad" /></Field>
+            <Field label="District"><input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} placeholder="e.g. Nashik" /></Field>
+          </div>
+          <Field label="Preferred Language">
+            <LanguageSelect value={form.preferred_language} onChange={(preferred_language) => setForm({ ...form, preferred_language })} />
+          </Field>
+          <button disabled={saving} className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 text-sm font-bold text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60">
+            {saving ? "Saving profile…" : "Complete setup & view rates →"}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}
 
 /* ════════════════════════════════════════
      SCREEN 1 — Home Dashboard
@@ -1010,32 +1357,58 @@ function Calculator({ prices, onBack }: { prices: PriceSnapshot[]; onBack: () =>
 
 
 /* ════════════════════════════════════════
-     SCREEN 7 — Profile
+     SCREEN 7 — Profile (Connected to Supabase)
    ════════════════════════════════════════ */
 function ProfileScreen({ profile, onSave, onLogout }: { profile: Profile; onSave: (profile: Profile) => void; onLogout: () => void }) {
   const [form, setForm] = useState(profile);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  function save(event: FormEvent) {
+  async function save(event: FormEvent) {
     event.preventDefault();
-    window.localStorage.setItem("kisansetu-profile", JSON.stringify(form));
+    setSaving(true);
+
+    if (supabase && profile.id) {
+      const { error } = await supabase.from("profiles").update({
+        name: form.name.trim(),
+        village: form.village.trim(),
+        taluka: form.taluka.trim(),
+        district: form.district.trim(),
+        preferred_language: form.preferred_language,
+        updated_at: new Date().toISOString(),
+      }).eq("id", profile.id);
+
+      if (error) {
+        console.error("Error updating profile in Supabase:", error.message);
+      }
+    } else {
+      window.localStorage.setItem("kisansetu-profile", JSON.stringify(form));
+    }
+
     onSave(form);
     setSaved(true);
+    setSaving(false);
   }
 
   return (
     <div className="max-w-2xl">
-      <Title title="Profile" detail="Manage your prototype farm profile." />
+      <Title title="Profile" detail="Manage your KisanSetu farm profile &amp; language preferences." />
       <Panel>
         <form onSubmit={save} className="space-y-5">
           {/* Avatar / name header */}
           <div className="flex items-center gap-4 pb-4 border-b border-kisan-cream-300">
-            <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-kisan-green-50 to-kisan-green-100 text-kisan-green-600 shadow-card">
-              <IconUserCircle size={40} />
-            </span>
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} alt={profile.name} className="h-16 w-16 rounded-2xl object-cover border-2 border-kisan-green-400 shadow-card" />
+            ) : (
+              <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-kisan-green-50 to-kisan-green-100 text-kisan-green-600 shadow-card">
+                <IconUserCircle size={40} />
+              </span>
+            )}
             <div>
               <p className="text-lg font-bold text-kisan-green-900">{profile.name}</p>
-              <p className="text-xs text-kisan-cream-700">Prototype local profile</p>
+              <p className="text-xs text-kisan-cream-700">
+                {profile.email ? profile.email : "Verified Farm Account"}
+              </p>
             </div>
           </div>
 
@@ -1048,8 +1421,8 @@ function ProfileScreen({ profile, onSave, onLogout }: { profile: Profile; onSave
           <Field label="Language"><LanguageSelect value={form.preferred_language} onChange={(preferred_language) => setForm({ ...form, preferred_language })} /></Field>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button className="flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 px-5 text-sm font-bold text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
-              Save profile
+            <button disabled={saving} className="flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 px-5 text-sm font-bold text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60">
+              {saving ? "Saving…" : "Save profile"}
             </button>
             <button type="button" onClick={onLogout} className="flex h-11 items-center gap-2 rounded-xl border-2 border-kisan-cream-400 px-4 text-sm font-bold text-kisan-cream-800 transition hover:border-red-300 hover:text-red-600">
               <IconLogout size={17} />Logout
