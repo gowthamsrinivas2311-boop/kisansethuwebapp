@@ -680,17 +680,36 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
   }
 
   return (
-    <main className="min-h-screen bg-kisan-cream-100 text-[#18251b]">
-      <div className="h-1 bg-gradient-to-r from-kisan-green-700 via-kisan-green-500 to-kisan-terra-500" />
-      <section className="mx-auto grid min-h-[calc(100vh-4px)] max-w-6xl items-center gap-12 px-5 py-10 lg:grid-cols-[1fr_1fr]">
+    <main className="relative min-h-screen text-[#18251b] overflow-hidden">
+      {/* ── Hero Background Image ── */}
+      <div className="absolute inset-0 z-0">
+        <img
+          src="/hero-farmer.jpg"
+          alt=""
+          className="h-full w-full object-cover object-top"
+        />
+        {/* Desktop overlay: semi-transparent cream so content is readable */}
+        <div className="absolute inset-0 hidden lg:block bg-gradient-to-r from-[rgba(255,252,245,0.88)] via-[rgba(255,252,245,0.82)] to-[rgba(255,252,245,0.65)]" />
+        {/* Mobile overlay: dark gradient from bottom for white text readability */}
+        <div className="absolute inset-0 lg:hidden bg-gradient-to-t from-[rgba(15,23,12,0.85)] via-[rgba(15,23,12,0.5)] to-[rgba(15,23,12,0.15)]" />
+      </div>
+
+      {/* ── Top accent bar ── */}
+      <div className="relative z-10 h-1 bg-gradient-to-r from-kisan-green-700 via-kisan-green-500 to-kisan-terra-500" />
+
+      {/* ── Content ── */}
+      <section className="relative z-10 mx-auto grid min-h-[calc(100vh-4px)] max-w-6xl items-center gap-12 px-5 py-10 lg:grid-cols-[1fr_1fr]">
         
         {/* Left Column — Title & Google OAuth CTA */}
         <div className="animate-fade-in">
-          <Brand />
-          <h1 className="mt-10 max-w-2xl text-4xl font-extrabold leading-tight text-kisan-green-900 sm:text-5xl">
-            Daily market clarity for <span className="text-kisan-terra-500">Maharashtra</span> farmers.
+          {/* Brand — dark on desktop, white on mobile */}
+          <div className="lg:block hidden"><Brand /></div>
+          <div className="lg:hidden block [&_span]:text-white [&_svg]:text-white"><Brand /></div>
+
+          <h1 className="mt-10 max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl text-white lg:text-kisan-green-900 drop-shadow-sm lg:drop-shadow-none">
+            Daily market clarity for <span className="text-kisan-terra-400 lg:text-kisan-terra-500">Maharashtra</span> farmers.
           </h1>
-          <p className="mt-5 max-w-xl text-base leading-7 text-kisan-cream-800">
+          <p className="mt-5 max-w-xl text-base leading-7 text-white/90 lg:text-kisan-cream-800">
             Check live mandi prices, connect with verified buyers, calculate net returns, and get instant AI advice in Marathi &amp; Hindi.
           </p>
 
@@ -718,20 +737,20 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
               )}
             </button>
 
-            <p className="text-center text-xs text-kisan-cream-700">
+            <p className="text-center text-xs text-white/70 lg:text-kisan-cream-700">
               Sign in with Google — no passwords, fast &amp; secure access.
             </p>
 
             {/* Fallback Dev Login if Supabase env vars not detected */}
             {showDevLogin && (
-              <div className="mt-4 pt-4 border-t border-kisan-cream-300">
-                <p className="text-xs font-semibold text-kisan-terra-600 mb-2">Dev Mode: Direct Login</p>
+              <div className="mt-4 pt-4 border-t border-white/20 lg:border-kisan-cream-300">
+                <p className="text-xs font-semibold text-kisan-terra-400 lg:text-kisan-terra-600 mb-2">Dev Mode: Direct Login</p>
                 <form onSubmit={handleDevSubmit} className="space-y-2">
                   <input
                     value={devName}
                     onChange={(e) => setDevName(e.target.value)}
                     placeholder="Enter name (e.g. Aarav Patil)"
-                    className="h-10 w-full rounded-xl border border-kisan-cream-400 px-3 text-sm"
+                    className="h-10 w-full rounded-xl border border-kisan-cream-400 px-3 text-sm bg-white/90"
                   />
                   <button className="h-9 w-full rounded-xl bg-kisan-green-600 text-xs font-bold text-white">
                     Enter Prototype Dashboard
@@ -740,11 +759,29 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
               </div>
             )}
           </div>
+
+          {/* Mobile trust badges — white text */}
+          <div className="mt-8 lg:hidden space-y-2.5">
+            <p className="text-xs font-bold text-white/90 flex items-center gap-1.5">
+              <IconShieldCheck size={17} className="text-kisan-terra-400" />
+              Trusted by farmers across Nashik, Pune, Nagpur, &amp; Solapur
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-white/80">
+              <div className="flex items-center gap-1.5 rounded-xl bg-white/10 backdrop-blur-sm p-2 border border-white/20">
+                <IconCircleCheck size={14} className="text-kisan-green-400 shrink-0" />
+                <span>Instant Google OAuth</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-xl bg-white/10 backdrop-blur-sm p-2 border border-white/20">
+                <IconSparkles size={14} className="text-kisan-terra-400 shrink-0" />
+                <span>AI Marathi/Hindi advisor</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Right Column — Redesigned Hero Preview Panel with Stacked Cards */}
         <div className="relative animate-fade-in">
-          <div className="relative rounded-3xl border border-kisan-cream-400/80 bg-gradient-to-br from-kisan-cream-200 via-white to-kisan-cream-100 p-6 shadow-elevated overflow-hidden">
+          <div className="relative rounded-3xl border border-kisan-cream-400/80 bg-gradient-to-br from-kisan-cream-200/95 via-white/95 to-kisan-cream-100/95 backdrop-blur-md p-6 shadow-elevated overflow-hidden">
             
             {/* Background glowing gradient highlights */}
             <div className="absolute -top-12 -right-12 h-44 w-44 rounded-full bg-gradient-to-br from-kisan-green-100/60 to-kisan-terra-100/40 blur-2xl pointer-events-none" />
@@ -772,8 +809,8 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
               </div>
             </div>
 
-            {/* Trust Badges & Value Proposition Callouts */}
-            <div className="mt-6 border-t border-kisan-cream-300/80 pt-4 space-y-2.5">
+            {/* Trust Badges & Value Proposition Callouts — desktop only */}
+            <div className="mt-6 border-t border-kisan-cream-300/80 pt-4 space-y-2.5 hidden lg:block">
               <p className="text-xs font-bold text-kisan-green-900 flex items-center gap-1.5">
                 <IconShieldCheck size={17} className="text-kisan-terra-500" />
                 Trusted by farmers across Nashik, Pune, Nagpur, &amp; Solapur
