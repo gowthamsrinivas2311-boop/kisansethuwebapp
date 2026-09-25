@@ -688,8 +688,9 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
           alt=""
           className="h-full w-full object-cover object-top"
         />
-        {/* Desktop overlay: semi-transparent cream so content is readable */}
-        <div className="absolute inset-0 hidden lg:block bg-gradient-to-r from-[rgba(255,252,245,0.88)] via-[rgba(255,252,245,0.82)] to-[rgba(255,252,245,0.65)]" />
+        {/* Desktop overlay: opaque left for text, transparent right to reveal farmer */}
+        <div className="absolute inset-0 hidden lg:block bg-gradient-to-r from-[rgba(255,252,245,0.95)] via-[rgba(255,252,245,0.75)] to-[rgba(255,252,245,0.25)]" />
+        <div className="absolute inset-0 hidden lg:block bg-gradient-to-t from-[rgba(255,252,245,0.6)] via-transparent to-[rgba(255,252,245,0.3)]" />
         {/* Mobile overlay: dark gradient from bottom for white text readability */}
         <div className="absolute inset-0 lg:hidden bg-gradient-to-t from-[rgba(15,23,12,0.85)] via-[rgba(15,23,12,0.5)] to-[rgba(15,23,12,0.15)]" />
       </div>
@@ -781,7 +782,7 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
 
         {/* Right Column — Redesigned Hero Preview Panel with Stacked Cards */}
         <div className="relative animate-fade-in">
-          <div className="relative rounded-3xl border border-kisan-cream-400/80 bg-gradient-to-br from-kisan-cream-200/95 via-white/95 to-kisan-cream-100/95 backdrop-blur-md p-6 shadow-elevated overflow-hidden">
+          <div className="relative rounded-3xl border border-white/50 bg-white/80 backdrop-blur-xl p-6 shadow-elevated overflow-hidden lg:bg-white/70">
             
             {/* Background glowing gradient highlights */}
             <div className="absolute -top-12 -right-12 h-44 w-44 rounded-full bg-gradient-to-br from-kisan-green-100/60 to-kisan-terra-100/40 blur-2xl pointer-events-none" />
