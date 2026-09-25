@@ -683,13 +683,22 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
     <main className="relative min-h-screen text-[#18251b] overflow-hidden">
       {/* ── Hero Background Image ── */}
       <div className="absolute inset-0 z-0">
+        {/* Mobile: portrait image */}
         <img
           src="/hero-farmer.jpg"
           alt=""
-          className="h-full w-full object-cover object-top"
+          className="h-full w-full object-cover object-top lg:hidden"
         />
-        {/* Dark gradient overlay for all screen sizes */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[rgba(15,23,12,0.85)] via-[rgba(15,23,12,0.5)] to-[rgba(15,23,12,0.15)]" />
+        {/* Desktop: landscape image */}
+        <img
+          src="/hero-farmer-desktop.jpg"
+          alt=""
+          className="h-full w-full object-cover object-center hidden lg:block"
+        />
+        {/* Mobile overlay: dark gradient for white text */}
+        <div className="absolute inset-0 lg:hidden bg-gradient-to-t from-[rgba(15,23,12,0.85)] via-[rgba(15,23,12,0.5)] to-[rgba(15,23,12,0.15)]" />
+        {/* Desktop overlay: subtle dark gradient that keeps image vibrant but text readable */}
+        <div className="absolute inset-0 hidden lg:block bg-gradient-to-r from-[rgba(10,20,8,0.75)] via-[rgba(10,20,8,0.45)] to-[rgba(10,20,8,0.2)]" />
       </div>
 
       {/* ── Top accent bar ── */}
