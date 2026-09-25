@@ -53,7 +53,10 @@ function demoAnswer(crop: string, trend: number, question: string, language: Lan
   if (question.toLowerCase().includes("hold") || question.toLowerCase().includes("wait")) {
     return `${crop} is ${trend >= 0 ? "showing positive momentum" : "under price pressure"}. Hold only when safe storage and your expected gain exceed transport, storage, and spoilage risk.`;
   }
-  return `${crop} is currently ${trend >= 0 ? "trending up" : "trending down"}. Compare two nearby market offers and your net return before committing a quantity; avoid relying on a single day's movement.`;
+  
+  // Acknowledge their actual question so it doesn't look like we ignored it
+  const shortQ = question.length > 20 ? question.slice(0, 20) + "..." : question;
+  return `Regarding "${shortQ}": I am currently looking at ${crop} data. Switch the crop context above if you want insights for a different commodity.`;
 }
 
 export async function POST(request: NextRequest) {
