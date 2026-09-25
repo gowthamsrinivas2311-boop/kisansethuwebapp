@@ -763,12 +763,12 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
             <div className="relative space-y-3">
               {/* Primary Anchor Card (Onion) */}
               <div className="relative z-10 rounded-2xl border border-kisan-cream-300 bg-white p-5 shadow-elevated card-lift transition-transform">
-                <PriceCard item={{ crop: "Onion", market: "Nashik APMC", price: 4043, unit: "quintal", date: "2026-09-24", source: "APMC Bulletin", previousPrice: 3980, trend: 11.2 }} />
+                <PriceCard item={{ crop: "Onion", market: "Nashik APMC", price: 4043, unit: "quintal", date: "2026-09-24", source: "APMC Bulletin", previousPrice: 3980, trend: 11.2, history: [3800, 3850, 3920, 3980, 4010, 4030, 4043] }} />
               </div>
 
               {/* Offset Second Layered Card (Tomato) */}
               <div className="relative z-0 -mt-6 rounded-2xl border border-kisan-cream-300/90 bg-white/95 p-5 shadow-card transform translate-y-2 opacity-95 card-lift transition-transform">
-                <PriceCard item={{ crop: "Tomato", market: "Pune APMC", price: 3180, unit: "quintal", date: "2026-09-24", source: "APMC Bulletin", previousPrice: 2840, trend: 11.8 }} />
+                <PriceCard item={{ crop: "Tomato", market: "Pune APMC", price: 3180, unit: "quintal", date: "2026-09-24", source: "APMC Bulletin", previousPrice: 2840, trend: 11.8, history: [2600, 2700, 2840, 2950, 3050, 3120, 3180] }} />
               </div>
             </div>
 
