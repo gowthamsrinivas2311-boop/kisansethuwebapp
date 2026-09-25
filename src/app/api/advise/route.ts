@@ -27,15 +27,32 @@ function trimSession(session: StoredSession) {
   return session;
 }
 
+function getLanguageInstruction(language: Language): string {
+  switch (language) {
+    case "hindi":
+      return "You MUST respond ENTIRELY in Hindi using Devanagari script (हिन्दी). Do NOT use English or transliteration.";
+    case "marathi":
+      return "You MUST respond ENTIRELY in Marathi using Devanagari script (मराठी). Do NOT use English or transliteration.";
+    default:
+      return "Respond in English.";
+  }
+}
+
 function demoAnswer(crop: string, trend: number, question: string, language: Language) {
   if (isVague(question)) {
-    if (language === "hindi") return "Namaskar. Aap kis crop, mandi, ya selling decision ke baare mein madad chahte hain?";
-    if (language === "marathi") return "Namaskar. Kontya pik, mandi, kiwa vikri nirnayabaddal madat havi aahe?";
+    if (language === "hindi") return "नमस्कार। आप किस फसल, मंडी, या बिक्री के फैसले के बारे में मदद चाहते हैं?";
+    if (language === "marathi") return "नमस्कार. कोणत्या पिकाबद्दल, मंडीबद्दल किंवा विक्रीच्या निर्णयाबद्दल मदत हवी आहे?";
     return "Namaskar. Which crop, market, or selling decision should I help with today?";
   }
-  if (language === "hindi") return `${crop} ka rujhan ${trend >= 0 ? "sakaraatmak" : "kamzor"} hai. Mandi, parivahan aur bhandaran laagat ki tulna karke hi bikri ka nirnay lein.`;
-  if (language === "marathi") return `${crop} cha kal ${trend >= 0 ? "sakaraatmak" : "kamzor"} aahe. Bazaarbhav, vahatuk ani sathavan kharch tapasoonach vikricha nirnay ghya.`;
-  if (question.toLowerCase().includes("hold") || question.toLowerCase().includes("wait")) return `${crop} is ${trend >= 0 ? "showing positive momentum" : "under price pressure"}. Hold only when safe storage and your expected gain exceed transport, storage, and spoilage risk.`;
+  if (language === "hindi") {
+    return `${crop} का रुझान ${trend >= 0 ? "सकारात्मक" : "कमज़ोर"} है। मंडी, परिवहन और भंडारण लागत की तुलना करके ही बिक्री का निर्णय लें।`;
+  }
+  if (language === "marathi") {
+    return `${crop} चा कल ${trend >= 0 ? "सकारात्मक" : "कमकुवत"} आहे. बाजारभाव, वाहतूक आणि साठवण खर्च तपासूनच विक्रीचा निर्णय घ्या.`;
+  }
+  if (question.toLowerCase().includes("hold") || question.toLowerCase().includes("wait")) {
+    return `${crop} is ${trend >= 0 ? "showing positive momentum" : "under price pressure"}. Hold only when safe storage and your expected gain exceed transport, storage, and spoilage risk.`;
+  }
   return `${crop} is currently ${trend >= 0 ? "trending up" : "trending down"}. Compare two nearby market offers and your net return before committing a quantity; avoid relying on a single day's movement.`;
 }
 
@@ -53,7 +70,8 @@ export async function POST(request: NextRequest) {
 
   const systemPrompt = `You are KisanSetu's practical Indian agricultural market advisor.
 Current market context: crop=${crop}, price=${price} per quintal, trend=${trend}%.
-Respond in ${language}, under 70 words, practical and cautious.
+${getLanguageInstruction(language)}
+Keep responses under 70 words, practical and cautious.
 Only give the market status summary on the first message of a session; first message: ${isFirstMessage ? "yes" : "no"}.
 On later messages, respond specifically to what the farmer typed.
 If the message is only a greeting or too vague, ask one short clarifying question instead of repeating the market summary.
@@ -74,7 +92,7 @@ ${session.summary ? `Conversation summary: ${session.summary}` : ""}`;
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",
         messages: [{ role: "system", content: systemPrompt }, ...session.messages],
-        max_tokens: 160,
+        max_tokens: 300,
         temperature: 0.7,
       }),
     });

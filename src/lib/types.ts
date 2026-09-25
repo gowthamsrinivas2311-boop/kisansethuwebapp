@@ -9,6 +9,7 @@ export type PriceSnapshot = {
   source: string;
   trend: number;
   previousPrice: number | null;
+  history: number[];
 };
 
 // Kept for the original mock-data helpers, while API routes use PriceSnapshot.

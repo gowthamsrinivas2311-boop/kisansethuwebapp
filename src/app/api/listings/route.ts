@@ -9,7 +9,7 @@ export async function GET() {
   const supabase = getSupabaseServerClient();
   if (supabase) {
     const { data, error } = await supabase.from("listings").select("*").order("created_at", { ascending: false });
-    if (!error && data) return NextResponse.json({ listings: data, source: "supabase" });
+    if (!error && data && data.length > 0) return NextResponse.json({ listings: data, source: "supabase" });
   }
   return NextResponse.json({ listings: localListings, source: "demo" });
 }

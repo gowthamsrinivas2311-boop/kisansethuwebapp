@@ -24,7 +24,7 @@ import {
   IconLeaf,
   IconShieldCheck,
 } from "@tabler/icons-react";
-import { CROPS } from "@/lib/demo-data";
+import { CROPS, BUYER_DEMAND, t, translateCrop, getCropImage } from "@/lib/demo-data";
 import type { Language, Listing, PriceSnapshot } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
@@ -144,12 +144,22 @@ function CropBadge({ crop, size = "normal" }: { crop: string; size?: "normal" | 
   const look = cropLooks[crop] ?? { mark: crop.slice(0, 2).toUpperCase(), bg: "#ecf7ee", fg: "#26733b", line: "#4b9b5a", gradFrom: "#ecf7ee", gradTo: "#d4ecc5" };
   const dim = size === "small" ? "h-9 w-9" : "h-12 w-12";
   const iconSize = size === "small" ? 18 : 24;
+  const imgSrc = getCropImage(crop);
+
   return (
     <span
-      className={`relative flex ${dim} shrink-0 items-center justify-center overflow-hidden rounded-xl`}
+      className={`relative flex ${dim} shrink-0 items-center justify-center overflow-hidden rounded-xl border border-kisan-cream-300 shadow-sm`}
       style={{ background: `linear-gradient(145deg, ${look.gradFrom}, ${look.gradTo})` }}
     >
-      <CropIcon crop={crop} size={iconSize} />
+      {imgSrc ? (
+        <img
+          src={imgSrc}
+          alt={crop}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <CropIcon crop={crop} size={iconSize} />
+      )}
       <span className="sr-only">{crop}</span>
     </span>
   );
@@ -166,38 +176,52 @@ function Trend({ value }: { value: number }) {
   );
 }
 
-/* ─── High Contrast Sparkline ─── */
+/* ─── Real Time-Series Sparkline ─── */
 function Sparkline({ item }: { item: PriceSnapshot }) {
-  const look = cropLooks[item.crop] ?? cropLooks.Onion;
-  const seed = item.crop.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const values = Array.from({ length: 7 }, (_, index) => item.price * (1 + Math.sin(seed + index) * 0.018 + (item.trend / 100) * ((index - 3) / 7)));
+  const up = item.trend >= 0;
+  const strokeColor = up ? "#1b6e34" : "#dc2626";
+
+  // Use real history array if provided, otherwise extrapolate from trend
+  let values = (item.history && item.history.length > 0) ? [...item.history] : [];
+  if (values.length === 0) {
+    const prev = item.previousPrice ?? item.price;
+    values = [prev, item.price];
+  }
+  if (values.length === 1) {
+    values = [values[0], values[0]];
+  }
+
   const min = Math.min(...values);
   const max = Math.max(...values);
   const spread = max - min || 1;
-  const points = values.map((value, index) => `${(index / 6) * 100},${30 - ((value - min) / spread) * 22}`).join(" ");
+  const count = values.length;
+
+  const points = values
+    .map((val, idx) => `${(idx / (count - 1)) * 100},${30 - ((val - min) / spread) * 22}`)
+    .join(" ");
+
   const areaPoints = `0,33 ${points} 100,33`;
-  const up = item.trend >= 0;
-  const filterId = `glow-${item.crop}`;
+  const endY = 30 - ((values[count - 1] - min) / spread) * 22;
 
   return (
-    <svg aria-label={`${item.crop} 7 day trend`} viewBox="0 0 100 38" className="h-12 w-full overflow-visible">
+    <svg aria-label={`${item.crop} trend`} viewBox="0 0 100 38" className="h-12 w-full overflow-visible">
       <defs>
-        <linearGradient id={`grad-${item.crop}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={look.line} stopOpacity="0.30" />
-          <stop offset="100%" stopColor={look.line} stopOpacity="0.0" />
+        <linearGradient id={`grad-${item.crop.replace(/\W+/g, "-")}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={strokeColor} stopOpacity="0.0" />
         </linearGradient>
       </defs>
       {/* Baseline */}
       <line x1="0" y1="33" x2="100" y2="33" stroke="#e0e7de" strokeWidth="0.8" strokeDasharray="2 2" />
       {/* Gradient Area Fill */}
-      <polygon fill={`url(#grad-${item.crop})`} points={areaPoints} />
+      <polygon fill={`url(#grad-${item.crop.replace(/\W+/g, "-")})`} points={areaPoints} />
       {/* High-contrast Trend Line */}
-      <polyline fill="none" stroke={look.line} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" points={points} />
+      <polyline fill="none" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
       {/* Highlighted End Dot */}
-      <circle cx="100" cy={30 - ((values[6] - min) / spread) * 22} r="3.5" fill={up ? "#1b6e34" : "#dc2626"} stroke="#ffffff" strokeWidth="1" />
-      {/* Day labels */}
-      {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-        <text key={i} x={(i / 6) * 100} y="38" fontSize="4.8" fontWeight="600" fill="#888170" textAnchor="middle">{d}</text>
+      <circle cx="100" cy={endY} r="3.5" fill={strokeColor} stroke="#ffffff" strokeWidth="1.2" />
+      {/* Dynamic timeline tick markers */}
+      {values.map((_, i) => (
+        <circle key={i} cx={(i / (count - 1)) * 100} cy="33" r="1" fill="#bbb4a4" />
       ))}
     </svg>
   );
@@ -232,13 +256,14 @@ function SkeletonStat() {
   );
 }
 
-function PriceCard({ item }: { item: PriceSnapshot }) {
+function PriceCard({ item, lang = "english" }: { item: PriceSnapshot; lang?: Language }) {
+  const cropLabel = translateCrop(item.crop, lang);
   return (
     <Panel>
       <div className="flex items-start gap-3">
         <CropBadge crop={item.crop} />
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-bold text-[#18251b]">{item.crop}</p>
+          <p className="text-[15px] font-bold text-[#18251b]">{cropLabel}</p>
           <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-kisan-cream-200 px-2 py-0.5 text-[11px] font-medium text-kisan-cream-800">
             <IconMapPin size={11} />{item.market}
           </span>
@@ -246,7 +271,7 @@ function PriceCard({ item }: { item: PriceSnapshot }) {
         <Trend value={item.trend} />
       </div>
       <div className="mt-4">
-        <p className="text-[10px] uppercase tracking-[0.1em] font-semibold text-kisan-cream-700">per quintal</p>
+        <p className="text-[10px] uppercase tracking-[0.1em] font-semibold text-kisan-cream-700">{t("per quintal", lang)}</p>
         <p className="mt-1 font-mono text-[28px] font-extrabold leading-none tabular-nums text-[#0d3519]">
           {money(item.price)}
         </p>
@@ -405,7 +430,7 @@ export function KisanSetuApp() {
           {/* Nav links */}
           <nav className="flex-1 px-3 py-4 space-y-1">
             {(["home", "prices", "market", "sms"] as View[]).map((item) => (
-              <SideNav key={item} view={item} active={view === item} onClick={() => setView(item)} />
+              <SideNav key={item} view={item} active={view === item} language={language} onClick={() => setView(item)} />
             ))}
           </nav>
 
@@ -416,8 +441,8 @@ export function KisanSetuApp() {
                 <IconSparkles size={16} />
               </span>
               <div>
-                <p className="text-xs font-bold text-kisan-terra-800">AI Advisor</p>
-                <p className="text-[10px] text-kisan-terra-600">Ask market questions</p>
+                <p className="text-xs font-bold text-kisan-terra-800">{t("Market Assistant", language)}</p>
+                <p className="text-[10px] text-kisan-terra-600">{language === "marathi" ? "बाजाराबद्दल विचारा" : language === "hindi" ? "बाज़ार प्रश्न पूछें" : "Ask market questions"}</p>
               </div>
             </button>
           </div>
@@ -425,17 +450,18 @@ export function KisanSetuApp() {
 
         {/* ─── Content ─── */}
         <div className="min-w-0 flex-1 pb-24 lg:pb-10">
-          <Header profile={profile} setView={setView} />
+          <Header profile={profile} language={language} setView={setView} />
           <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-            {view === "home" && <Home prices={prices} loading={loading} leader={leader} go={setView} />}
-            {view === "prices" && <Prices prices={prices} loading={loading} />}
-            {view === "market" && <Market />}
-            {view === "sms" && <Sms prices={prices} />}
-            {view === "calculator" && <Calculator prices={prices} onBack={() => setView("home")} />}
+            {view === "home" && <Home prices={prices} loading={loading} leader={leader} language={language} go={setView} />}
+            {view === "prices" && <Prices prices={prices} loading={loading} language={language} />}
+            {view === "market" && <Market prices={prices} language={language} />}
+            {view === "sms" && <Sms prices={prices} language={language} />}
+            {view === "calculator" && <Calculator prices={prices} language={language} onBack={() => setView("home")} />}
             {view === "advisor" && <Advisor prices={prices} language={language} onBack={() => setView("home")} />}
             {view === "profile" && (
               <ProfileScreen
                 profile={profile}
+                language={language}
                 onSave={setProfile}
                 onLogout={async () => {
                   if (supabase) {
@@ -456,10 +482,10 @@ export function KisanSetuApp() {
       {/* ─── Mobile bottom nav ─── */}
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-kisan-cream-400 bg-white/95 backdrop-blur-md lg:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-4">
-          <Nav label="Home" active={view === "home"} icon={<IconHome size={22} />} onClick={() => setView("home")} />
-          <Nav label="Prices" active={view === "prices"} icon={<IconChartBar size={22} />} onClick={() => setView("prices")} />
-          <Nav label="Market" active={view === "market"} icon={<IconBuildingStore size={22} />} onClick={() => setView("market")} />
-          <Nav label="SMS" active={view === "sms"} icon={<IconMessage size={22} />} onClick={() => setView("sms")} />
+          <Nav label={t("Dashboard", language)} active={view === "home"} icon={<IconHome size={22} />} onClick={() => setView("home")} />
+          <Nav label={t("Price Board", language)} active={view === "prices"} icon={<IconChartBar size={22} />} onClick={() => setView("prices")} />
+          <Nav label={t("Market Linkage", language)} active={view === "market"} icon={<IconBuildingStore size={22} />} onClick={() => setView("market")} />
+          <Nav label={t("SMS Service", language)} active={view === "sms"} icon={<IconMessage size={22} />} onClick={() => setView("sms")} />
         </div>
       </nav>
     </main>
@@ -482,10 +508,15 @@ function Brand() {
 }
 
 /* ─── Header ─── */
-function Header({ profile, setView }: { profile: Profile; setView: (view: View) => void }) {
-  const location = [profile.village, profile.taluka, profile.district].filter(Boolean).join(", ") || "Set your farm location";
+function Header({ profile, language, setView }: { profile: Profile; language: Language; setView: (view: View) => void }) {
+  const fallbackLoc = language === "marathi" ? "शेतीचे ठिकाण सेट करा" : language === "hindi" ? "खेत का स्थान सेट करें" : "Set your farm location";
+  const location = [profile.village, profile.taluka, profile.district].filter(Boolean).join(", ") || fallbackLoc;
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const greeting = language === "marathi"
+    ? (hour < 12 ? "शुभ प्रभात" : hour < 17 ? "शुभ दुपार" : "शुभ संध्याकाळ")
+    : language === "hindi"
+    ? (hour < 12 ? "शुभ प्रभात" : hour < 17 ? "शुभ दोपहर" : "शुभ संध्या")
+    : (hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening");
 
   return (
     <header className="border-b border-kisan-cream-400 bg-white/80 backdrop-blur-sm">
@@ -506,7 +537,7 @@ function Header({ profile, setView }: { profile: Profile; setView: (view: View) 
               <IconUserCircle size={22} />
             </span>
           )}
-          <span className="hidden sm:inline text-kisan-green-800">Account</span>
+          <span className="hidden sm:inline text-kisan-green-800">{t("Account", language)}</span>
         </button>
       </div>
       {/* Mobile greeting sub-header */}
@@ -532,7 +563,7 @@ function Nav({ label, icon, active, onClick }: { label: string; icon: React.Reac
   );
 }
 
-function SideNav({ view, active, onClick }: { view: View; active: boolean; onClick: () => void }) {
+function SideNav({ view, active, language, onClick }: { view: View; active: boolean; language: Language; onClick: () => void }) {
   const icons = {
     home: <IconHome size={19} />,
     prices: <IconChartBar size={19} />,
@@ -547,10 +578,12 @@ function SideNav({ view, active, onClick }: { view: View; active: boolean; onCli
     sms: "SMS Service",
   };
 
+  const label = t(labels[view] ?? view, language);
+
   return (
     <button onClick={onClick} className={`group flex h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all ${active ? "tab-active text-white shadow-sm" : "text-kisan-cream-800 hover:bg-kisan-cream-300/60 hover:text-kisan-green-700"}`}>
       <span className={active ? "" : "text-kisan-cream-700 group-hover:text-kisan-green-600"}>{icons[view]}</span>
-      {labels[view] ?? view}
+      {label}
       {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white/70" />}
     </button>
   );
@@ -856,7 +889,20 @@ function OnboardingScreen({ user, onComplete }: { user: User; onComplete: (profi
 /* ════════════════════════════════════════
      SCREEN 1 — Home Dashboard
    ════════════════════════════════════════ */
-function Home({ prices, loading, leader, go }: { prices: PriceSnapshot[]; loading: boolean; leader?: PriceSnapshot; go: (view: View) => void }) {
+function Home({ prices, loading, leader, language, go }: { prices: PriceSnapshot[]; loading: boolean; leader?: PriceSnapshot; language: Language; go: (view: View) => void }) {
+  const leaderCrop = leader ? translateCrop(leader.crop, language) : "";
+  const leaderText = leader
+    ? language === "marathi"
+      ? <><strong className="text-kisan-green-700">{leaderCrop}</strong> मध्ये आज सर्वात मोठी हालचाल आहे (<strong className="text-kisan-terra-600">{Math.abs(leader.trend).toFixed(1)}%</strong>). विक्री, साठवणूक, खरेदीदार किंवा निव्वळ नफ्याबद्दल विचारा.</>
+      : language === "hindi"
+      ? <><strong className="text-kisan-green-700">{leaderCrop}</strong> में आज सबसे बड़ा उतार-चढ़ाव है (<strong className="text-kisan-terra-600">{Math.abs(leader.trend).toFixed(1)}%</strong>). बिक्री, भंडारण, खरीदार या शुद्ध मुनाफे के बारे में पूछें।</>
+      : <><strong className="text-kisan-green-700">{leader.crop}</strong> has the strongest movement today at <strong className="text-kisan-terra-600">{Math.abs(leader.trend).toFixed(1)}%</strong>. Ask about selling, storage, nearby buyers, or net returns.</>
+    : language === "marathi"
+    ? "विक्री, साठवणूक, खरेदीदार किंवा निव्वळ नफ्याबद्दल विचारा."
+    : language === "hindi"
+    ? "बिक्री, भंडारण, खरीदार या शुद्ध मुनाफे के बारे में पूछें।"
+    : "Ask about selling, storage, nearby buyers, or net returns.";
+
   return (
     <div className="space-y-6">
       {/* Hero: AI assistant callout — the ONE hero moment */}
@@ -867,16 +913,14 @@ function Home({ prices, loading, leader, go }: { prices: PriceSnapshot[]; loadin
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="text-[15px] font-bold text-kisan-green-900">Market Assistant</p>
+              <p className="text-[15px] font-bold text-kisan-green-900">{t("Market Assistant", language)}</p>
               <span className="rounded-full bg-kisan-green-50 border border-kisan-green-200 px-2 py-0.5 text-[10px] font-bold text-kisan-green-600 uppercase tracking-wider">AI</span>
             </div>
             <p className="mt-2 text-sm leading-relaxed text-kisan-cream-800">
-              {leader
-                ? <><strong className="text-kisan-green-700">{leader.crop}</strong> has the strongest movement today at <strong className="text-kisan-terra-600">{Math.abs(leader.trend).toFixed(1)}%</strong>. Ask about selling, storage, nearby buyers, or net returns.</>
-                : "Ask about selling, storage, nearby buyers, or net returns."}
+              {leaderText}
             </p>
             <button onClick={() => go("advisor")} className="group mt-3 inline-flex items-center gap-1.5 rounded-lg bg-kisan-green-600 px-4 py-2 text-sm font-bold text-white shadow-btn transition-all hover:bg-kisan-green-500 hover:-translate-y-0.5 active:translate-y-0">
-              Talk to assistant <IconChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+              {t("Talk to assistant", language)} <IconChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" />
             </button>
           </div>
         </div>
@@ -894,9 +938,9 @@ function Home({ prices, loading, leader, go }: { prices: PriceSnapshot[]; loadin
           </>
         ) : (
           <>
-            <Status icon={<IconChartBar size={16} />} label="Market records" value={`${prices.length} crops`} color="green" />
-            <Status icon={<IconBuildingStore size={16} />} label="Buyer requests" value="12 open" color="terra" />
-            <Status icon={<IconCircleCheck size={16} />} label="Verified sellers" value="48 active" color="ochre" />
+            <Status icon={<IconChartBar size={16} />} label={t("Market records", language)} value={`${prices.length} ${t("crops", language)}`} color="green" />
+            <Status icon={<IconBuildingStore size={16} />} label={t("Buyer requests", language)} value={`12 ${t("open", language)}`} color="terra" />
+            <Status icon={<IconCircleCheck size={16} />} label={t("Verified sellers", language)} value={`48 ${t("active", language)}`} color="ochre" />
           </>
         )}
       </div>
@@ -904,11 +948,11 @@ function Home({ prices, loading, leader, go }: { prices: PriceSnapshot[]; loadin
       {/* Today's prices */}
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="text-lg font-bold text-kisan-green-900">Today&apos;s crop prices</h2>
-          <p className="mt-1 text-xs text-kisan-cream-700">Maharashtra weighted market average</p>
+          <h2 className="text-lg font-bold text-kisan-green-900">{t("Today's crop prices", language)}</h2>
+          <p className="mt-1 text-xs text-kisan-cream-700">{t("Maharashtra weighted market average", language)}</p>
         </div>
         <button onClick={() => go("prices")} className="group flex items-center gap-1 text-sm font-bold text-kisan-green-600 transition hover:text-kisan-green-500">
-          All prices <IconChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+          {t("All prices", language)} <IconChevronRight size={16} className="transition-transform group-hover:translate-x-0.5" />
         </button>
       </div>
 
@@ -918,14 +962,14 @@ function Home({ prices, loading, leader, go }: { prices: PriceSnapshot[]; loadin
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {prices.slice(0, 6).map((item) => <PriceCard key={item.crop} item={item} />)}
+          {prices.slice(0, 6).map((item) => <PriceCard key={item.crop} item={item} lang={language} />)}
         </div>
       )}
 
       {/* Quick action cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <ActionButton onClick={() => go("market")} icon={<IconBuildingStore size={22} />} title="Find a buyer" text="Live demand from local traders" />
-        <ActionButton onClick={() => go("calculator")} icon={<IconCalculator size={22} />} title="Net return" text="Calculate travel & packing costs" />
+        <ActionButton onClick={() => go("market")} icon={<IconBuildingStore size={22} />} title={t("Find a buyer", language)} text={t("Live demand from local traders", language)} actionLabel={t("Open", language)} />
+        <ActionButton onClick={() => go("calculator")} icon={<IconCalculator size={22} />} title={t("Net return", language)} text={t("Calculate travel & packing costs", language)} actionLabel={t("Open", language)} />
       </div>
     </div>
   );
@@ -948,7 +992,7 @@ function Status({ icon, label, value, color }: { icon: React.ReactNode; label: s
   );
 }
 
-function ActionButton({ onClick, icon, title, text }: { onClick: () => void; icon: React.ReactNode; title: string; text: string }) {
+function ActionButton({ onClick, icon, title, text, actionLabel = "Open" }: { onClick: () => void; icon: React.ReactNode; title: string; text: string; actionLabel?: string }) {
   return (
     <button onClick={onClick} className="group card-lift rounded-xl border border-kisan-cream-400 bg-white p-5 text-left shadow-card transition-all hover:border-kisan-terra-300 hover:shadow-elevated">
       <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-kisan-green-50 to-kisan-green-100 text-kisan-green-600 transition group-hover:from-kisan-green-100 group-hover:to-kisan-green-200 group-hover:text-kisan-green-700">
@@ -957,7 +1001,7 @@ function ActionButton({ onClick, icon, title, text }: { onClick: () => void; ico
       <p className="mt-3 text-[15px] font-bold text-kisan-green-900">{title}</p>
       <p className="mt-1 text-xs leading-4 text-kisan-cream-700">{text}</p>
       <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-kisan-terra-500 opacity-0 transition-opacity group-hover:opacity-100">
-        Open <IconChevronRight size={13} />
+        {actionLabel} <IconChevronRight size={13} />
       </span>
     </button>
   );
@@ -967,13 +1011,19 @@ function ActionButton({ onClick, icon, title, text }: { onClick: () => void; ico
 /* ════════════════════════════════════════
      SCREEN 2 — Market Linkage
    ════════════════════════════════════════ */
-function Market() {
+function Market({ prices, language }: { prices: PriceSnapshot[]; language: Language }) {
   const [mode, setMode] = useState<"buyers" | "sellers" | "list">("buyers");
   const [listings, setListings] = useState<Listing[]>([]);
   const [notice, setNotice] = useState("");
-  const [form, setForm] = useState({ farmer_name: "", crop: "Onion", quantity: "", price: "", location: "", phone: "" });
+  const availableCrops = Array.from(new Set([...prices.map((p) => p.crop), ...CROPS])).filter(Boolean);
+  const [form, setForm] = useState({ farmer_name: "", crop: availableCrops[0] || "Onion", quantity: "", price: "", location: "", phone: "" });
 
-  useEffect(() => { fetch("/api/listings").then((r) => r.json()).then((data) => setListings(data.listings ?? [])).catch(() => setNotice("Marketplace data is temporarily unavailable.")); }, []);
+  useEffect(() => {
+    fetch("/api/listings")
+      .then((r) => r.json())
+      .then((data) => setListings(data.listings ?? []))
+      .catch(() => setNotice(t("Marketplace data is temporarily unavailable.", language)));
+  }, [language]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -981,20 +1031,20 @@ function Market() {
     const data = await response.json();
     if (!response.ok) { setNotice(data.error ?? "Could not publish the listing."); return; }
     setListings((current) => [data.listing, ...current]);
-    setForm({ farmer_name: "", crop: "Onion", quantity: "", price: "", location: "", phone: "" });
-    setNotice("Listing published for buyers in your region.");
+    setForm({ farmer_name: "", crop: availableCrops[0] || "Onion", quantity: "", price: "", location: "", phone: "" });
+    setNotice(t("Listing published for buyers in your region.", language));
     setMode("sellers");
   }
 
   return (
     <div className="space-y-5">
-      <Title title="Market linkage" detail="Verified buyer demand and farmer supply in one place." />
+      <Title title={t("Market linkage", language)} detail={t("Verified buyer demand and farmer supply in one place.", language)} />
 
       {/* Tabs */}
       <div className="grid grid-cols-3 rounded-xl border border-kisan-cream-400 bg-kisan-cream-200/50 p-1 gap-1">
-        <Tab active={mode === "buyers"} onClick={() => setMode("buyers")}>Buyer demand</Tab>
-        <Tab active={mode === "sellers"} onClick={() => setMode("sellers")}>Farmer supply</Tab>
-        <Tab active={mode === "list"} onClick={() => setMode("list")}>List crop</Tab>
+        <Tab active={mode === "buyers"} onClick={() => setMode("buyers")}>{t("Buyer demand", language)}</Tab>
+        <Tab active={mode === "sellers"} onClick={() => setMode("sellers")}>{t("Farmer supply", language)}</Tab>
+        <Tab active={mode === "list"} onClick={() => setMode("list")}>{t("List crop", language)}</Tab>
       </div>
 
       {notice && (
@@ -1006,8 +1056,8 @@ function Market() {
       {/* Buyer demand */}
       {mode === "buyers" && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {buyerDemand.map((demand) => (
-            <Panel key={demand.buyer}>
+          {BUYER_DEMAND.map((demand, idx) => (
+            <Panel key={`${demand.buyer}-${idx}`}>
               <div className="flex items-start gap-3">
                 <CropBadge crop={demand.crop} />
                 <div className="min-w-0 flex-1">
@@ -1015,20 +1065,20 @@ function Market() {
                     <div>
                       <p className="text-[15px] font-bold text-kisan-green-900">{demand.buyer}</p>
                       <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-kisan-ochre-100 to-kisan-ochre-50 border border-kisan-ochre-200 px-2 py-0.5 text-[10px] font-bold text-kisan-terra-700 uppercase tracking-wide">
-                        <IconCircleCheck size={11} />Verified
+                        <IconCircleCheck size={11} />{t("Verified", language)}
                       </span>
                     </div>
                     <div className="text-right">
                       <p className="font-mono text-xl font-extrabold text-kisan-green-800">{money(demand.offer)}</p>
-                      <p className="text-[10px] font-medium text-kisan-cream-700 uppercase">offer / qtl</p>
+                      <p className="text-[10px] font-medium text-kisan-cream-700 uppercase">{t("offer / qtl", language)}</p>
                     </div>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 border-t border-kisan-cream-300 pt-3 text-xs text-kisan-cream-800">
-                    <span className="flex items-center gap-1"><IconLeaf size={12} className="text-kisan-green-400" />{demand.crop} · {demand.quantity}</span>
+                    <span className="flex items-center gap-1"><IconLeaf size={12} className="text-kisan-green-400" />{translateCrop(demand.crop, language)} · {demand.quantity}</span>
                     <span className="flex items-center gap-1 justify-end"><IconMapPin size={12} className="text-kisan-terra-400" />{demand.location}</span>
                   </div>
                   <button className="group mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-kisan-terra-400 to-kisan-terra-500 text-sm font-bold text-white shadow-btn-terra transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
-                    <IconMessage size={16} />Request buyer contact
+                    <IconMessage size={16} />{t("Request buyer contact", language)}
                   </button>
                 </div>
               </div>
@@ -1047,18 +1097,18 @@ function Market() {
                 <div className="min-w-0 flex-1">
                   <div className="flex justify-between gap-2">
                     <div>
-                      <p className="text-[15px] font-bold text-kisan-green-900">{listing.crop} <span className="font-normal text-kisan-cream-800">from {listing.farmer_name}</span></p>
+                      <p className="text-[15px] font-bold text-kisan-green-900">{translateCrop(listing.crop, language)} <span className="font-normal text-kisan-cream-800">{t("from", language)} {listing.farmer_name}</span></p>
                       <span className="mt-1 inline-flex items-center gap-1 text-xs text-kisan-cream-700">
-                        <IconMapPin size={12} className="text-kisan-terra-400" />{listing.quantity} qtl · {listing.location}
+                        <IconMapPin size={12} className="text-kisan-terra-400" />{listing.quantity} {t("qtl", language)} · {listing.location}
                       </span>
                     </div>
                     <div className="text-right">
                       <p className="font-mono text-lg font-extrabold text-kisan-green-800">{money(listing.price)}</p>
-                      <p className="text-[10px] text-kisan-cream-700">/ qtl</p>
+                      <p className="text-[10px] text-kisan-cream-700">/ {t("qtl", language)}</p>
                     </div>
                   </div>
                   <a href={`https://wa.me/${listing.phone}`} target="_blank" rel="noreferrer" className="mt-3 flex h-10 items-center justify-center gap-2 rounded-xl border-2 border-kisan-green-500 text-sm font-bold text-kisan-green-600 transition-all hover:bg-kisan-green-50 hover:shadow-sm">
-                    <IconMessage size={16} />Contact farmer
+                    <IconMessage size={16} />{t("Contact farmer", language)}
                   </a>
                 </div>
               </div>
@@ -1076,20 +1126,24 @@ function Market() {
                 <IconPlus size={20} />
               </span>
               <div>
-                <p className="font-bold text-kisan-green-900">Publish your crop</p>
-                <p className="mt-0.5 text-sm text-kisan-cream-700">Available for nearby verified buyers</p>
+                <p className="font-bold text-kisan-green-900">{t("Publish your crop", language)}</p>
+                <p className="mt-0.5 text-sm text-kisan-cream-700">{t("Available for nearby verified buyers", language)}</p>
               </div>
             </div>
-            <Field label="Farmer name"><input value={form.farmer_name} onChange={(e) => setForm({ ...form, farmer_name: e.target.value })} /></Field>
-            <Field label="Crop"><select value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })}>{CROPS.map((item) => <option key={item}>{item}</option>)}</select></Field>
+            <Field label={t("Farmer name", language)}><input value={form.farmer_name} onChange={(e) => setForm({ ...form, farmer_name: e.target.value })} /></Field>
+            <Field label={t("Crop", language)}>
+              <select value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })}>
+                {availableCrops.map((item) => <option key={item} value={item}>{translateCrop(item, language)}</option>)}
+              </select>
+            </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Quantity (qtl)"><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field>
-              <Field label="Expected ₹ / qtl"><input type="number" min="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field>
+              <Field label={t("Quantity (qtl)", language)}><input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field>
+              <Field label={t("Expected ₹ / qtl", language)}><input type="number" min="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field>
             </div>
-            <Field label="Village / district"><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
-            <Field label="WhatsApp number"><input inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+            <Field label={t("Village / district", language)}><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
+            <Field label={t("WhatsApp number", language)}><input inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
             <button className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 text-sm font-bold text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
-              <IconPlus size={17} />Publish crop listing
+              <IconPlus size={17} />{t("Publish crop listing", language)}
             </button>
           </form>
         </Panel>
@@ -1103,10 +1157,19 @@ function Market() {
      SCREEN 3 — AI Market Advisor
    ════════════════════════════════════════ */
 function Advisor({ prices, language, onBack }: { prices: PriceSnapshot[]; language: Language; onBack: () => void }) {
-  const [crop, setCrop] = useState("Onion");
+  const availableCrops = Array.from(new Set([...prices.map((p) => p.crop), ...CROPS])).filter(Boolean);
+  const [crop, setCrop] = useState(availableCrops[0] || "Onion");
   const [question, setQuestion] = useState("");
   const [waiting, setWaiting] = useState(false);
-  const [messages, setMessages] = useState<Chat[]>([{ role: "assistant", content: "Namaskar 🙏 I can help you compare prices, decide whether to sell or wait, calculate a likely net return, or find the right market question to ask a buyer." }]);
+
+  const initialGreeting =
+    language === "marathi"
+      ? "नमस्कार 🙏 मी तुम्हाला बाजारभावाची तुलना करणे, आज विकावे की थांबावे, वाहतूक व साठवण खर्च मोजणे यात मदत करू शकतो."
+      : language === "hindi"
+      ? "नमस्कार 🙏 मैं आपको मंडियों के भाव की तुलना करने, आज बेचें या प्रतीक्षा करें, तथा शुद्ध मुनाफे का अनुमान लगाने में मदद कर सकता हूँ।"
+      : "Namaskar 🙏 I can help you compare prices, decide whether to sell or wait, calculate a likely net return, or find the right market question to ask a buyer.";
+
+  const [messages, setMessages] = useState<Chat[]>([{ role: "assistant", content: initialGreeting }]);
   const selected = prices.find((item) => item.crop === crop) ?? prices[0];
 
   async function send(text = question) {
@@ -1123,29 +1186,41 @@ function Advisor({ prices, language, onBack }: { prices: PriceSnapshot[]; langua
         body: JSON.stringify({ sessionId: getAdvisorSessionId(), crop, price: selected.price, trend: selected.trend, language, question: clean }),
       });
       const data = await response.json();
-      setMessages((current) => [...current, { role: "assistant", content: data.advice ?? "I could not answer that just now. Please try again." }]);
+      const fallbackMsg =
+        language === "marathi"
+          ? "सध्या उत्तर देता आले नाही. कृपया पुन्हा प्रयत्न करा."
+          : language === "hindi"
+          ? "वर्तमान में उत्तर नहीं दिया जा सका। कृपया पुनः प्रयास करें।"
+          : "I could not answer that just now. Please try again.";
+      setMessages((current) => [...current, { role: "assistant", content: data.advice ?? fallbackMsg }]);
     } finally {
       setWaiting(false);
     }
   }
 
-  const quick = ["Should I sell today?", "What price should I ask buyers?", "Is storage worth the cost?"];
+  const quick = [
+    t("Should I sell today?", language),
+    t("What price should I ask buyers?", language),
+    t("Is storage worth the cost?", language),
+  ];
 
   return (
     <div className="max-w-3xl space-y-4">
-      <Title title="Market assistant" detail="Ask about prices, buyers, selling time, storage, or transport." back={onBack} />
+      <Title title={t("Market assistant", language)} detail={t("Ask about prices, buyers, selling time, storage, or transport.", language)} back={onBack} />
 
       {/* Crop selector bar */}
       <Panel className="!p-3">
         <div className="flex items-center gap-3">
           <CropBadge crop={crop} size="small" />
           <select value={crop} onChange={(e) => setCrop(e.target.value)} className="h-10 min-w-0 flex-1 rounded-xl border border-kisan-cream-400 bg-white px-3 text-sm font-medium">
-            {CROPS.map((item) => <option key={item}>{item}</option>)}
+            {availableCrops.map((item) => (
+              <option key={item} value={item}>{translateCrop(item, language)}</option>
+            ))}
           </select>
           {selected && (
             <div className="text-right">
               <span className="text-sm font-bold text-kisan-green-700">{money(selected.price)}</span>
-              <span className="block text-[10px] text-kisan-cream-700">/qtl</span>
+              <span className="block text-[10px] text-kisan-cream-700">/{t("qtl", language)}</span>
             </div>
           )}
         </div>
@@ -1165,14 +1240,14 @@ function Advisor({ prices, language, onBack }: { prices: PriceSnapshot[]; langua
 
       {/* Input bar */}
       <div className="flex gap-2 border-t border-kisan-cream-400 pt-4">
-        <input value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder="Ask a market question…" className="h-12 min-w-0 flex-1 rounded-xl border border-kisan-cream-400 bg-white px-4 text-sm transition" />
+        <input value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }} placeholder={t("Ask a market question…", language)} className="h-12 min-w-0 flex-1 rounded-xl border border-kisan-cream-400 bg-white px-4 text-sm transition" />
         <button onClick={() => send()} aria-label="Send question" className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
           <IconSend size={18} />
         </button>
       </div>
 
       <p className="text-[11px] leading-4 text-kisan-cream-700">
-        Advice is informational. Verify live offers and weigh quality, transport, and storage before you sell.
+        {t("Advice is informational. Verify live offers and weigh quality, transport, and storage before you sell.", language)}
       </p>
     </div>
   );
@@ -1230,7 +1305,7 @@ function ChatMessages({ messages, waiting }: { messages: Chat[]; waiting?: boole
 /* ════════════════════════════════════════
      SCREEN 4 — SMS Market Service
    ════════════════════════════════════════ */
-function Sms({ prices }: { prices: PriceSnapshot[] }) {
+function Sms({ prices, language }: { prices: PriceSnapshot[]; language: Language }) {
   const [query, setQuery] = useState("ONION");
   const [sent, setSent] = useState(false);
   const found = prices.find((item) => item.crop.toUpperCase() === query.trim().toUpperCase());
@@ -1246,13 +1321,13 @@ function Sms({ prices }: { prices: PriceSnapshot[] }) {
 
   return (
     <div className="max-w-3xl space-y-5">
-      <Title title="SMS market service" detail="Farmers can text a crop name to receive one latest price." />
+      <Title title={t("SMS market service", language)} detail={t("Farmers can text a crop name to receive one latest price.", language)} />
 
       {/* SMS simulator */}
       <Panel>
         <ChatMessages messages={messages} />
         <div className="mt-4 flex gap-2 border-t border-kisan-cream-300 pt-4">
-          <input value={query} onChange={(e) => setQuery(e.target.value.toUpperCase())} placeholder="Type a crop name…" className="h-11 min-w-0 flex-1 rounded-xl border border-kisan-cream-400 bg-white px-3.5 text-sm transition" />
+          <input value={query} onChange={(e) => setQuery(e.target.value.toUpperCase())} placeholder={t("Type a crop name…", language)} className="h-11 min-w-0 flex-1 rounded-xl border border-kisan-cream-400 bg-white px-3.5 text-sm transition" />
           <button onClick={() => setSent(true)} className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0">
             <IconSend size={18} />
           </button>
@@ -1266,7 +1341,7 @@ function Sms({ prices }: { prices: PriceSnapshot[] }) {
             <IconCircleCheck size={20} />
           </span>
           <div>
-            <p className="font-bold text-kisan-green-900">SMS integration is active</p>
+            <p className="font-bold text-kisan-green-900">{t("SMS integration is active", language)}</p>
             <p className="mt-1 text-sm leading-relaxed text-kisan-cream-700">Your Twilio webhook returns a current Supabase price for crop keywords sent to the service number.</p>
           </div>
         </div>
@@ -1279,17 +1354,17 @@ function Sms({ prices }: { prices: PriceSnapshot[] }) {
 /* ════════════════════════════════════════
      SCREEN 5 — Price Board
    ════════════════════════════════════════ */
-function Prices({ prices, loading }: { prices: PriceSnapshot[]; loading: boolean }) {
+function Prices({ prices, loading, language }: { prices: PriceSnapshot[]; loading: boolean; language: Language }) {
   return (
     <>
-      <Title title="Mandi price board" detail="Daily prices averaged across reporting markets" />
+      <Title title={t("Mandi price board", language)} detail={t("Daily prices averaged across reporting markets", language)} />
       {loading ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {prices.map((item) => <PriceCard key={item.crop} item={item} />)}
+          {prices.map((item) => <PriceCard key={item.crop} item={item} lang={language} />)}
         </div>
       )}
     </>
@@ -1300,8 +1375,9 @@ function Prices({ prices, loading }: { prices: PriceSnapshot[]; loading: boolean
 /* ════════════════════════════════════════
      SCREEN 6 — Net Return Calculator
    ════════════════════════════════════════ */
-function Calculator({ prices, onBack }: { prices: PriceSnapshot[]; onBack: () => void }) {
-  const [crop, setCrop] = useState("Onion");
+function Calculator({ prices, language, onBack }: { prices: PriceSnapshot[]; language: Language; onBack: () => void }) {
+  const availableCrops = Array.from(new Set([...prices.map((p) => p.crop), ...CROPS])).filter(Boolean);
+  const [crop, setCrop] = useState(availableCrops[0] || "Onion");
   const [quantity, setQuantity] = useState(10);
   const [distance, setDistance] = useState(25);
   const chosen = prices.find((item) => item.crop === crop);
@@ -1312,21 +1388,21 @@ function Calculator({ prices, onBack }: { prices: PriceSnapshot[]; onBack: () =>
 
   return (
     <div className="max-w-3xl space-y-5">
-      <Title title="Net return calculator" detail="Estimate your sale value before you transport." back={onBack} />
+      <Title title={t("Net return calculator", language)} detail={t("Estimate your sale value before you transport.", language)} back={onBack} />
 
       {/* Inputs */}
       <Panel>
         <div className="space-y-4">
-          <Field label="Crop">
+          <Field label={t("Crop", language)}>
             <select value={crop} onChange={(e) => setCrop(e.target.value)}>
-              {CROPS.map((item) => <option key={item}>{item}</option>)}
+              {availableCrops.map((item) => <option key={item} value={item}>{translateCrop(item, language)}</option>)}
             </select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Quantity (qtl)">
+            <Field label={t("Quantity (qtl)", language)}>
               <input type="number" min="0" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
             </Field>
-            <Field label="Distance (km)">
+            <Field label={t("Distance (km)", language)}>
               <input type="number" min="0" value={distance} onChange={(e) => setDistance(Number(e.target.value))} />
             </Field>
           </div>
@@ -1338,15 +1414,15 @@ function Calculator({ prices, onBack }: { prices: PriceSnapshot[]; onBack: () =>
         <div className="flex items-center gap-2 mb-4 pb-3 border-b border-kisan-green-100">
           <IconCalculator size={18} className="text-kisan-green-500" />
           <p className="text-xs font-bold text-kisan-cream-800 uppercase tracking-wide">
-            Estimated return using {chosen ? money(chosen.price) : "current price"}/qtl
+            {chosen ? money(chosen.price) : "current price"}/{t("qtl", language)}
           </p>
         </div>
         <div className="space-y-3">
-          <Row label="Gross sale value" value={money(gross)} />
-          <Row label="Transport (₹8/km)" value={`−${money(transport)}`} />
-          <Row label="Packing (5%)" value={`−${money(packing)}`} />
+          <Row label={t("Gross sale value", language)} value={money(gross)} />
+          <Row label={t("Transport (₹8/km)", language)} value={`−${money(transport)}`} />
+          <Row label={t("Packing (5%)", language)} value={`−${money(packing)}`} />
           <div className="flex justify-between border-t border-kisan-green-200 pt-3">
-            <span className="text-base font-bold text-kisan-green-900">Expected net return</span>
+            <span className="text-base font-bold text-kisan-green-900">{t("Expected net return", language)}</span>
             <span className="font-mono text-xl font-extrabold text-kisan-green-600">{money(net)}</span>
           </div>
         </div>
@@ -1359,7 +1435,7 @@ function Calculator({ prices, onBack }: { prices: PriceSnapshot[]; onBack: () =>
 /* ════════════════════════════════════════
      SCREEN 7 — Profile (Connected to Supabase)
    ════════════════════════════════════════ */
-function ProfileScreen({ profile, onSave, onLogout }: { profile: Profile; onSave: (profile: Profile) => void; onLogout: () => void }) {
+function ProfileScreen({ profile, language, onSave, onLogout }: { profile: Profile; language: Language; onSave: (profile: Profile) => void; onLogout: () => void }) {
   const [form, setForm] = useState(profile);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1392,7 +1468,7 @@ function ProfileScreen({ profile, onSave, onLogout }: { profile: Profile; onSave
 
   return (
     <div className="max-w-2xl">
-      <Title title="Profile" detail="Manage your KisanSetu farm profile &amp; language preferences." />
+      <Title title={t("Profile", language)} detail={t("Manage your KisanSetu farm profile & language preferences.", language)} />
       <Panel>
         <form onSubmit={save} className="space-y-5">
           {/* Avatar / name header */}
@@ -1407,29 +1483,29 @@ function ProfileScreen({ profile, onSave, onLogout }: { profile: Profile; onSave
             <div>
               <p className="text-lg font-bold text-kisan-green-900">{profile.name}</p>
               <p className="text-xs text-kisan-cream-700">
-                {profile.email ? profile.email : "Verified Farm Account"}
+                {profile.email ? profile.email : t("Verified Farm Account", language)}
               </p>
             </div>
           </div>
 
-          <Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <Field label={t("Name", language)}><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Village"><input value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })} /></Field>
-            <Field label="Taluka"><input value={form.taluka} onChange={(e) => setForm({ ...form, taluka: e.target.value })} /></Field>
-            <Field label="District"><input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></Field>
+            <Field label={t("Village", language)}><input value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })} /></Field>
+            <Field label={t("Taluka", language)}><input value={form.taluka} onChange={(e) => setForm({ ...form, taluka: e.target.value })} /></Field>
+            <Field label={t("District", language)}><input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></Field>
           </div>
-          <Field label="Language"><LanguageSelect value={form.preferred_language} onChange={(preferred_language) => setForm({ ...form, preferred_language })} /></Field>
+          <Field label={t("Language", language)}><LanguageSelect value={form.preferred_language} onChange={(preferred_language) => setForm({ ...form, preferred_language })} /></Field>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button disabled={saving} className="flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-kisan-green-500 to-kisan-green-600 px-5 text-sm font-bold text-white shadow-btn transition-all hover:shadow-elevated hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60">
-              {saving ? "Saving…" : "Save profile"}
+              {saving ? t("Saving…", language) : t("Save profile", language)}
             </button>
             <button type="button" onClick={onLogout} className="flex h-11 items-center gap-2 rounded-xl border-2 border-kisan-cream-400 px-4 text-sm font-bold text-kisan-cream-800 transition hover:border-red-300 hover:text-red-600">
-              <IconLogout size={17} />Logout
+              <IconLogout size={17} />{t("Logout", language)}
             </button>
             {saved && (
               <span className="flex items-center gap-1 text-sm font-bold text-kisan-green-600 animate-fade-in">
-                <IconCircleCheck size={16} />Saved
+                <IconCircleCheck size={16} />{t("Saved", language)}
               </span>
             )}
           </div>
@@ -1440,5 +1516,63 @@ function ProfileScreen({ profile, onSave, onLogout }: { profile: Profile; onSave
 }
 
 
-/* ─── Data transform (untouched logic) ─── */
-function toCropPrices(rows: Array<Record<string, unknown>>): PriceSnapshot[] { const groups = new Map<string, Array<Record<string, unknown>>>(); for (const row of rows) { const crop = String(row.crop); groups.set(crop, [...(groups.get(crop) ?? []), row]); } return [...groups.entries()].map(([crop, records]) => { const dayMap = new Map<string, Array<Record<string, unknown>>>(); for (const row of records) { const date = String(row.date); dayMap.set(date, [...(dayMap.get(date) ?? []), row]); } const [latest, previous] = [...dayMap.keys()].sort((a, b) => b.localeCompare(a)); const mean = (items: Array<Record<string, unknown>>) => items.reduce((total, item) => total + Number(item.price), 0) / items.length; const currentRows = dayMap.get(latest) ?? []; const priorRows = previous ? dayMap.get(previous) ?? [] : []; const price = mean(currentRows); const previousPrice = priorRows.length ? mean(priorRows) : null; return { crop, market: "Maharashtra market average", price, unit: String(currentRows[0]?.unit ?? "quintal"), date: latest, source: String(currentRows[0]?.source ?? "data.gov.in"), previousPrice, trend: previousPrice ? Number((((price - previousPrice) / previousPrice) * 100).toFixed(1)) : 0 }; }); }
+/* ─── Data transform & Trend Calculation ─── */
+function toCropPrices(rows: Array<Record<string, unknown>>): PriceSnapshot[] {
+  if (!rows || rows.length === 0) return [];
+
+  // If already formatted PriceSnapshot from /api/prices
+  if (rows[0] && Array.isArray(rows[0].history) && typeof rows[0].price === "number") {
+    return rows as unknown as PriceSnapshot[];
+  }
+
+  const groups = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of rows) {
+    const crop = String(row.crop || "").trim();
+    if (!crop) continue;
+    groups.set(crop, [...(groups.get(crop) ?? []), row]);
+  }
+
+  return [...groups.entries()].map(([crop, records]) => {
+    const dayMap = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of records) {
+      const date = String(row.date || "");
+      if (!date) continue;
+      dayMap.set(date, [...(dayMap.get(date) ?? []), row]);
+    }
+
+    // Sort dates descending: newest first
+    const sortedDates = [...dayMap.keys()].sort((a, b) => b.localeCompare(a));
+    const mean = (items: Array<Record<string, unknown>>) =>
+      items.reduce((total, item) => total + Number(item.price || 0), 0) / (items.length || 1);
+
+    const dailyAverages = sortedDates.map((date) => ({
+      date,
+      avg: Math.round(mean(dayMap.get(date) ?? [])),
+    }));
+
+    const latest = dailyAverages[0]?.date ?? new Date().toISOString().split("T")[0];
+    const price = dailyAverages[0]?.avg ?? 0;
+    const previousPrice = dailyAverages.length > 1 ? dailyAverages[1].avg : null;
+
+    let trend = 0;
+    if (previousPrice !== null && previousPrice > 0) {
+      trend = Number((((price - previousPrice) / previousPrice) * 100).toFixed(1));
+    }
+
+    // Oldest to newest for sparkline (up to 7 days)
+    const history = dailyAverages.slice(0, 7).reverse().map((d) => d.avg);
+
+    const firstRow = records[0] ?? {};
+    return {
+      crop,
+      market: "Maharashtra APMC avg",
+      price,
+      unit: String(firstRow.unit ?? "quintal"),
+      date: latest,
+      source: String(firstRow.source ?? "Agmarknet (data.gov.in)"),
+      previousPrice,
+      trend,
+      history: history.length > 0 ? history : [price],
+    };
+  });
+}
