@@ -110,28 +110,26 @@ export async function GET() {
       if (rows.length > 0) {
         // Upsert with unique constraint on (crop, market, date) to avoid duplicates.
         // The constraint name "prices_crop_market_date_key" must exist in Supabase.
-        const { error, count } = await supabase
+        const { error } = await supabase
           .from("prices")
           .upsert(rows, {
             onConflict: "crop,market,date",
             ignoreDuplicates: false,
-          })
-          .select("id", { count: "exact", head: true });
+          });
 
         if (error) {
           // If unique constraint does not exist on table, fallback to regular insert
-          const { error: insertError, count: insertCount } = await supabase
+          const { error: insertError } = await supabase
             .from("prices")
-            .insert(rows)
-            .select("id", { count: "exact", head: true });
+            .insert(rows);
 
           if (insertError) {
             errors.push({ offset, error: insertError.message });
           } else {
-            totalSynced += insertCount ?? rows.length;
+            totalSynced += rows.length;
           }
         } else {
-          totalSynced += count ?? rows.length;
+          totalSynced += rows.length;
         }
       }
 
