@@ -688,11 +688,8 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
           alt=""
           className="h-full w-full object-cover object-top"
         />
-        {/* Desktop overlay: opaque left for text, transparent right to reveal farmer */}
-        <div className="absolute inset-0 hidden lg:block bg-gradient-to-r from-[rgba(255,252,245,0.95)] via-[rgba(255,252,245,0.75)] to-[rgba(255,252,245,0.25)]" />
-        <div className="absolute inset-0 hidden lg:block bg-gradient-to-t from-[rgba(255,252,245,0.6)] via-transparent to-[rgba(255,252,245,0.3)]" />
-        {/* Mobile overlay: dark gradient from bottom for white text readability */}
-        <div className="absolute inset-0 lg:hidden bg-gradient-to-t from-[rgba(15,23,12,0.85)] via-[rgba(15,23,12,0.5)] to-[rgba(15,23,12,0.15)]" />
+        {/* Dark gradient overlay for all screen sizes */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[rgba(15,23,12,0.85)] via-[rgba(15,23,12,0.5)] to-[rgba(15,23,12,0.15)]" />
       </div>
 
       {/* ── Top accent bar ── */}
@@ -703,14 +700,12 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
         
         {/* Left Column — Title & Google OAuth CTA */}
         <div className="animate-fade-in">
-          {/* Brand — dark on desktop, white on mobile */}
-          <div className="lg:block hidden"><Brand /></div>
-          <div className="lg:hidden block [&_span]:text-white [&_svg]:text-white"><Brand /></div>
+          <div className="[&_span]:text-white [&_svg]:text-white"><Brand /></div>
 
-          <h1 className="mt-10 max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl text-white lg:text-kisan-green-900 drop-shadow-sm lg:drop-shadow-none">
-            Daily market clarity for <span className="text-kisan-terra-400 lg:text-kisan-terra-500">Maharashtra</span> farmers.
+          <h1 className="mt-10 max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl text-white drop-shadow-sm">
+            Daily market clarity for <span className="text-kisan-terra-400">Maharashtra</span> farmers.
           </h1>
-          <p className="mt-5 max-w-xl text-base leading-7 text-white/90 lg:text-kisan-cream-800">
+          <p className="mt-5 max-w-xl text-base leading-7 text-white/90">
             Check live mandi prices, connect with verified buyers, calculate net returns, and get instant AI advice in Marathi &amp; Hindi.
           </p>
 
@@ -738,14 +733,14 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
               )}
             </button>
 
-            <p className="text-center text-xs text-white/70 lg:text-kisan-cream-700">
+            <p className="text-center text-xs text-white/70">
               Sign in with Google — no passwords, fast &amp; secure access.
             </p>
 
             {/* Fallback Dev Login if Supabase env vars not detected */}
             {showDevLogin && (
-              <div className="mt-4 pt-4 border-t border-white/20 lg:border-kisan-cream-300">
-                <p className="text-xs font-semibold text-kisan-terra-400 lg:text-kisan-terra-600 mb-2">Dev Mode: Direct Login</p>
+              <div className="mt-4 pt-4 border-t border-white/20">
+                <p className="text-xs font-semibold text-kisan-terra-400 mb-2">Dev Mode: Direct Login</p>
                 <form onSubmit={handleDevSubmit} className="space-y-2">
                   <input
                     value={devName}
@@ -761,8 +756,8 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
             )}
           </div>
 
-          {/* Mobile trust badges — white text */}
-          <div className="mt-8 lg:hidden space-y-2.5">
+          {/* Trust badges — white text on all screens */}
+          <div className="mt-8 space-y-2.5">
             <p className="text-xs font-bold text-white/90 flex items-center gap-1.5">
               <IconShieldCheck size={17} className="text-kisan-terra-400" />
               Trusted by farmers across Nashik, Pune, Nagpur, &amp; Solapur
@@ -807,24 +802,6 @@ function Landing({ onDevLogin }: { onDevLogin: (name: string) => void }) {
               {/* Offset Second Layered Card (Tomato) */}
               <div className="relative z-0 -mt-6 rounded-2xl border border-kisan-cream-300/90 bg-white/95 p-5 shadow-card transform translate-y-2 opacity-95 card-lift transition-transform">
                 <PriceCard item={{ crop: "Tomato", market: "Pune APMC", price: 3180, unit: "quintal", date: "2026-09-24", source: "APMC Bulletin", previousPrice: 2840, trend: 11.8, history: [2600, 2700, 2840, 2950, 3050, 3120, 3180] }} />
-              </div>
-            </div>
-
-            {/* Trust Badges & Value Proposition Callouts — desktop only */}
-            <div className="mt-6 border-t border-kisan-cream-300/80 pt-4 space-y-2.5 hidden lg:block">
-              <p className="text-xs font-bold text-kisan-green-900 flex items-center gap-1.5">
-                <IconShieldCheck size={17} className="text-kisan-terra-500" />
-                Trusted by farmers across Nashik, Pune, Nagpur, &amp; Solapur
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-kisan-cream-800">
-                <div className="flex items-center gap-1.5 rounded-xl bg-kisan-cream-50/90 p-2 border border-kisan-cream-300/60">
-                  <IconCircleCheck size={14} className="text-kisan-green-600 shrink-0" />
-                  <span>Instant Google OAuth</span>
-                </div>
-                <div className="flex items-center gap-1.5 rounded-xl bg-kisan-cream-50/90 p-2 border border-kisan-cream-300/60">
-                  <IconSparkles size={14} className="text-kisan-terra-500 shrink-0" />
-                  <span>AI Marathi/Hindi advisor</span>
-                </div>
               </div>
             </div>
 
